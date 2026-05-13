@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@theme {
+  /* Backgrounds */
+  --color-bg-page: #1c1712;
+  --color-bg-panel: #2a241d;
+  --color-bg-panel-hover: #332c22;
+  --color-bg-inner: #3d3429;
+
+  /* Borders */
+  --color-border-subtle: #4a4030;
+  --color-border-accent: #c89540;
+
+  /* Text */
+  --color-text-primary: #f7ead0;
+  --color-text-body: #ebdcb8;
+  --color-text-secondary: #d8c8a4;
+  --color-text-dim: #bfae87;
+  --color-text-muted: #a89972;
+
+  /* Status */
+  --color-gold: #f0c14a;
+  --color-gold-bright: #ffd766;
+  --color-green: #8fcc8f;
+  --color-red: #e36868;
+  --color-blue: #82b3ee;
+  --color-purple: #c896ee;
+
+  /* Item qualities */
+  --color-q-common: #b5a99a;
+  --color-q-uncommon: #8fcc8f;
+  --color-q-rare: #82b3ee;
+  --color-q-epic: #c896ee;
+  --color-q-legendary: #f0c14a;
+
+  /* Fonts */
+  --font-display: var(--font-cinzel), Georgia, serif;
+  --font-body: var(--font-fraunces), Georgia, serif;
+  --font-mono: var(--font-jetbrains), "Courier New", monospace;
+}
+
+:root {
+  --font-cinzel: "Cinzel";
+  --font-fraunces: "Fraunces";
+  --font-jetbrains: "JetBrains Mono";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: radial-gradient(ellipse at top, #2a2218 0%, #14110d 100%);
+  background-attachment: fixed;
+  background-color: #1c1712;
+  color: #ebdcb8;
+  font-family: var(--font-body);
+  min-height: 100vh;
+}
+
+/* Panel corner accent */
+.panel-accent {
+  position: relative;
+}
+
+.panel-accent::before,
+.panel-accent::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-color: #c89540;
+  border-style: solid;
+}
+
+.panel-accent::before {
+  top: -1px;
+  left: -1px;
+  border-width: 1px 0 0 1px;
+}
+
+.panel-accent::after {
+  top: -1px;
+  right: -1px;
+  border-width: 1px 1px 0 0;
+}
+
+/* Skill bar */
+.skill-bar-fill {
+  background: linear-gradient(90deg, #c89540 0%, #f0c14a 100%);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #2a241d;
+}
+::-webkit-scrollbar-thumb {
+  background: #4a4030;
+  border-radius: 2px;
+}
