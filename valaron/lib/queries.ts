@@ -140,6 +140,42 @@ export async function getTotalXpHistory(hashedId: string, points = 60): Promise<
   return results;
 }
 
+/** XP/h rate for ALL skills, based on last 2 snapshots each. Returns a map skillName → xp/h */
+export async function getAllSkillRates(hashedId: string): Promise<Map<string, number>> {
+  // Get last 2 distinct snapshot times
+  const times = await db
+    .selectDistinct({ takenAt: skillSnapshots.takenAt })
+    .from(skillSnapshots)
+    .where(eq(skillSnapshots.hashedId, hashedId))
+    .orderBy(desc(skillSnapshots.takenAt))
+    .limit(2);
+
+  const rates = new Map<string, number>();
+  if (times.length < 2) return rates;
+
+  const [newerTime, olderTime] = times;
+  const tDeltaH =
+    (new Date(newerTime.takenAt).getTime() - new Date(olderTime.takenAt).getTime()) / 3_600_000;
+  if (tDeltaH <= 0) return rates;
+
+  const [newerRows, olderRows] = await Promise.all([
+    db.select().from(skillSnapshots).where(
+      and(eq(skillSnapshots.hashedId, hashedId), eq(skillSnapshots.takenAt, newerTime.takenAt))
+    ),
+    db.select().from(skillSnapshots).where(
+      and(eq(skillSnapshots.hashedId, hashedId), eq(skillSnapshots.takenAt, olderTime.takenAt))
+    ),
+  ]);
+
+  const olderMap = new Map(olderRows.map((r) => [r.skillName, r.experience ?? 0]));
+  for (const row of newerRows) {
+    const name = row.skillName ?? "";
+    const delta = (row.experience ?? 0) - (olderMap.get(name) ?? 0);
+    if (delta > 0) rates.set(name, Math.round(delta / tDeltaH));
+  }
+  return rates;
+}
+
 /** XP/h rate for a skill based on last 2 snapshots */
 export async function getSkillXpRate(hashedId: string, skillName: string): Promise<number> {
   const rows = await db

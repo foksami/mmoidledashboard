@@ -9,12 +9,21 @@ import {
   getLatestAction,
   getGoldHistory,
   getTotalXpHistory,
+  getAllSkillRates,
 } from "@/lib/queries"
+import {
+  getCharacterEffects,
+  getWorldBosses,
+  getShrineProgress,
+} from "@/lib/idlemmo"
 import { Panel } from "@/components/ui/Panel"
 import { SkillBar } from "@/components/ui/SkillBar"
 import { MiniSparkline } from "@/components/ui/MiniSparkline"
 import { CharacterSwitcher } from "@/components/CharacterSwitcher"
 import { ActionCountdown } from "@/components/ActionCountdown"
+import { EffectsPanel } from "@/components/EffectsPanel"
+import { WorldBossRadar } from "@/components/WorldBossRadar"
+import { ShrinePanel } from "@/components/ShrinePanel"
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -78,8 +87,8 @@ export default async function DashboardPage({
 
   const hashedId = activeCharacter.hashedId
 
-  // Parallel data fetch
-  const [snapshot, skills, stats, action, goldHistory, xpHistory] =
+  // Parallel data fetch — DB queries + live API calls
+  const [snapshot, skills, stats, action, goldHistory, xpHistory, skillRates, effects, worldBosses, shrine] =
     await Promise.all([
       getLatestSnapshot(hashedId),
       getLatestSkills(hashedId),
@@ -87,6 +96,10 @@ export default async function DashboardPage({
       getLatestAction(hashedId),
       getGoldHistory(hashedId, 60),
       getTotalXpHistory(hashedId, 60),
+      getAllSkillRates(hashedId),
+      getCharacterEffects(hashedId).catch(() => []),
+      getWorldBosses().catch(() => []),
+      getShrineProgress().catch(() => []),
     ])
 
   // Patch total level into the active tab
@@ -211,6 +224,11 @@ export default async function DashboardPage({
               />
             </Panel>
 
+            {/* World Boss Radar */}
+            <Panel title="World Bosses" icon="☠">
+              <WorldBossRadar bosses={worldBosses} />
+            </Panel>
+
             {/* Skill Matrix */}
             <Panel
               title="Skills"
@@ -228,6 +246,7 @@ export default async function DashboardPage({
                       name={skill.skillName ?? ""}
                       level={skill.level ?? 0}
                       experience={skill.experience ?? 0}
+                      delta={skillRates.get(skill.skillName ?? "") ?? undefined}
                     />
                   ))}
                 </div>
@@ -253,6 +272,20 @@ export default async function DashboardPage({
                       />
                     ))}
                 </div>
+              </Panel>
+            )}
+
+            {/* Effects */}
+            {effects.length > 0 && (
+              <Panel title="Active Effects" icon="✦" accent>
+                <EffectsPanel effects={effects} />
+              </Panel>
+            )}
+
+            {/* Shrine */}
+            {shrine.length > 0 && (
+              <Panel title="Shrine" icon="🕯">
+                <ShrinePanel tiers={shrine} />
               </Panel>
             )}
 

@@ -22,11 +22,14 @@ function actionIcon(actionType: string | null): string {
 }
 
 function formatCountdown(ms: number): string {
-  if (ms <= 0) return "00:00"
+  if (ms <= 0) return "0s"
   const totalSec = Math.floor(ms / 1000)
-  const minutes = Math.floor(totalSec / 60)
-  const seconds = totalSec % 60
-  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`
+  return `${s}s`
 }
 
 function countdownColor(ms: number): string {
@@ -70,12 +73,17 @@ export function ActionCountdown({
   const remaining = expiresMs != null ? expiresMs - now : null
   const isExpired = remaining != null && remaining <= 0
 
-  // Progress percentage (0-100)
+  // Progress: derive elapsed from (total - remaining) so we never use now - startedMs directly.
+  // started_at from the API may have a different timezone offset than real UTC, but
+  // expiresAt - startedAt gives the correct total duration since both share the same offset.
   let progressPct = 0
+  let displayStartMs: number | null = null
   if (startedMs != null && expiresMs != null) {
     const total = expiresMs - startedMs
-    const elapsed = now - startedMs
+    const rem = remaining ?? 0
+    const elapsed = Math.max(0, total - rem)
     progressPct = total > 0 ? Math.min(100, Math.round((elapsed / total) * 100)) : 100
+    displayStartMs = now - elapsed
   }
 
   const countdownMs = remaining != null && remaining > 0 ? remaining : 0
@@ -103,6 +111,7 @@ export function ActionCountdown({
         <span
           className={`text-xl font-bold tabular-nums flex-shrink-0 ${color}`}
           style={{ fontFamily: "var(--font-mono)" }}
+          suppressHydrationWarning
         >
           {isExpired ? "Completing…" : label}
         </span>
@@ -120,15 +129,16 @@ export function ActionCountdown({
               ? "linear-gradient(90deg, #c89540 0%, #f0c14a 100%)"
               : "linear-gradient(90deg, #f0c14a 0%, #ffd766 100%)",
           }}
+          suppressHydrationWarning
         />
       </div>
 
       {/* Footer: timestamps */}
-      {startedAt && expiresAt && (
-        <div className="flex justify-between text-[10px] text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-mono)" }}>
-          <span>{new Date(startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          <span>{progressPct}%</span>
-          <span>{new Date(expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+      {displayStartMs != null && expiresAt && (
+        <div className="flex justify-between text-[10px] text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-mono)" }} suppressHydrationWarning>
+          <span suppressHydrationWarning>{new Date(displayStartMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span suppressHydrationWarning>{progressPct}%</span>
+          <span suppressHydrationWarning>{new Date(expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
         </div>
       )}
     </div>
