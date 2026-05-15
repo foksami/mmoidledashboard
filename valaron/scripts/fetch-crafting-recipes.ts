@@ -65,7 +65,7 @@ interface RecipeDetail {
   hashed_id: string
   name: string
   type: string
-  crafting?: {
+  recipe?: {
     skill: string
     level_required: number
     max_uses: number
@@ -121,7 +121,7 @@ async function main() {
 
     try {
       const detail = await fetchRecipeDetail(hashedId)
-      const c = detail.crafting
+      const c = detail.recipe
 
       if (!c) {
         console.log(`  – ${name}: no crafting data, skipping`)
