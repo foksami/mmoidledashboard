@@ -9,9 +9,15 @@
     "poll": "tsx scripts/poll.ts",
     "migrate": "tsx lib/migrate.ts",
     "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "market:gathering": "tsx scripts/fetch-market-daily.ts --gathering",
+    "market:gear": "tsx scripts/fetch-market-daily.ts --gear",
+    "market:all": "tsx scripts/fetch-market-daily.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@libsql/client": "^0.17.3",
     "better-sqlite3": "^12.10.0",
     "dotenv": "^17.4.2",

@@ -9,7 +9,7 @@ config({ path: ".env.local" });
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
-import { eq } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import path from "path";
 import * as schema from "../lib/schema";
 import {
@@ -95,20 +95,20 @@ async function pollCharacter(hashedId: string) {
     });
   }
 
-  // Action log — only write if different from last entry
-  if (action.type) {
-    const lastAction = await db.query.actionLog.findFirst({
-      where: eq(schema.actionLog.hashedId, hashedId),
-      orderBy: (t, { desc }) => [desc(t.detectedAt)],
-    });
+  // Action log + activity session tracking
+  const lastAction = await db.query.actionLog.findFirst({
+    where: eq(schema.actionLog.hashedId, hashedId),
+    orderBy: (t, { desc }) => [desc(t.detectedAt)],
+  });
 
-    const actionChanged =
-      !lastAction ||
-      lastAction.actionType !== action.type ||
-      lastAction.actionTitle !== action.title ||
-      lastAction.startedAt !== action.started_at;
+  const actionChanged =
+    !lastAction ||
+    lastAction.actionType !== (action.type ?? null) ||
+    lastAction.actionTitle !== (action.title ?? null) ||
+    lastAction.startedAt !== (action.started_at ?? null);
 
-    if (actionChanged) {
+  if (actionChanged) {
+    if (action.type) {
       await db.insert(schema.actionLog).values({
         hashedId,
         actionType: action.type,
@@ -116,6 +116,43 @@ async function pollCharacter(hashedId: string) {
         startedAt: action.started_at,
         expiresAt: action.expires_at,
         detectedAt: now,
+      });
+    }
+
+    // Close the previous open session (if any)
+    const openSession = await db.query.activitySessions.findFirst({
+      where: and(
+        eq(schema.activitySessions.hashedId, hashedId),
+        isNull(schema.activitySessions.endedAt)
+      ),
+      orderBy: (t, { desc }) => [desc(t.startedAt)],
+    });
+
+    if (openSession) {
+      const durationSec = Math.floor(
+        (new Date(now).getTime() - new Date(openSession.startedAt).getTime()) / 1000
+      );
+      const xpSnap = JSON.stringify(
+        Object.fromEntries(Object.entries(info.skills).map(([k, v]) => [k, v.experience]))
+      );
+      await db
+        .update(schema.activitySessions)
+        .set({ endedAt: now, goldEnd: info.gold, xpSnapEnd: xpSnap, durationSec })
+        .where(eq(schema.activitySessions.id, openSession.id));
+    }
+
+    // Open a new session for the incoming action
+    if (action.type) {
+      const xpSnap = JSON.stringify(
+        Object.fromEntries(Object.entries(info.skills).map(([k, v]) => [k, v.experience]))
+      );
+      await db.insert(schema.activitySessions).values({
+        hashedId,
+        actionType: action.type,
+        actionTitle: action.title ?? null,
+        startedAt: now,
+        goldStart: info.gold,
+        xpSnapStart: xpSnap,
       });
     }
   }

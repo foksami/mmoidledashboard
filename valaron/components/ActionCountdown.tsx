@@ -1,12 +1,16 @@
 "use client"
 
 import React, { useEffect, useState } from "react"
+import { fmtNum, fmtTime } from "@/lib/fmt"
 
 interface ActionCountdownProps {
   actionType: string | null
   actionTitle: string | null
   expiresAt: string | null
-  startedAt: string | null
+  detectedAt: string | null
+  skillLevel?: number | null
+  skillExperience?: number | null
+  skillXpRate?: number | null
 }
 
 function actionIcon(actionType: string | null): string {
@@ -44,7 +48,10 @@ export function ActionCountdown({
   actionType,
   actionTitle,
   expiresAt,
-  startedAt,
+  detectedAt,
+  skillLevel,
+  skillExperience,
+  skillXpRate,
 }: ActionCountdownProps) {
   const [now, setNow] = useState<number>(() => Date.now())
 
@@ -68,22 +75,20 @@ export function ActionCountdown({
   }
 
   const expiresMs = expiresAt ? new Date(expiresAt).getTime() : null
-  const startedMs = startedAt ? new Date(startedAt).getTime() : null
+  const detectedAtMs = detectedAt ? new Date(detectedAt).getTime() : null
 
   const remaining = expiresMs != null ? expiresMs - now : null
   const isExpired = remaining != null && remaining <= 0
 
-  // Progress: derive elapsed from (total - remaining) so we never use now - startedMs directly.
-  // started_at from the API may have a different timezone offset than real UTC, but
-  // expiresAt - startedAt gives the correct total duration since both share the same offset.
+  // Progress: use detectedAt (real UTC, recorded locally) as session start.
+  // API's started_at/expires_at are per-tick (~23s) and offset by ~7.5h, so we ignore started_at.
   let progressPct = 0
   let displayStartMs: number | null = null
-  if (startedMs != null && expiresMs != null) {
-    const total = expiresMs - startedMs
-    const rem = remaining ?? 0
-    const elapsed = Math.max(0, total - rem)
-    progressPct = total > 0 ? Math.min(100, Math.round((elapsed / total) * 100)) : 100
-    displayStartMs = now - elapsed
+  if (detectedAtMs != null && expiresMs != null) {
+    const total = expiresMs - detectedAtMs
+    const elapsed = now - detectedAtMs
+    progressPct = total > 0 ? Math.min(100, Math.max(0, Math.round((elapsed / total) * 100))) : 100
+    displayStartMs = detectedAtMs
   }
 
   const countdownMs = remaining != null && remaining > 0 ? remaining : 0
@@ -136,9 +141,33 @@ export function ActionCountdown({
       {/* Footer: timestamps */}
       {displayStartMs != null && expiresAt && (
         <div className="flex justify-between text-[10px] text-[var(--color-text-muted)]" style={{ fontFamily: "var(--font-mono)" }} suppressHydrationWarning>
-          <span suppressHydrationWarning>{new Date(displayStartMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span suppressHydrationWarning>{fmtTime(new Date(displayStartMs).toISOString())}</span>
           <span suppressHydrationWarning>{progressPct}%</span>
-          <span suppressHydrationWarning>{new Date(expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          <span suppressHydrationWarning>{fmtTime(expiresAt)}</span>
+        </div>
+      )}
+
+      {/* Skill snapshot */}
+      {skillLevel != null && (
+        <div className="flex items-center justify-between pt-1 border-t border-[var(--color-border-subtle)]">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--color-text-muted)] uppercase tracking-widest" style={{ fontFamily: "var(--font-display)" }}>
+              Lv
+            </span>
+            <span className="text-sm font-semibold text-[var(--color-gold)]" style={{ fontFamily: "var(--font-mono)" }}>
+              {skillLevel}
+            </span>
+            {skillExperience != null && (
+              <span className="text-xs text-[var(--color-text-dim)]" style={{ fontFamily: "var(--font-mono)" }}>
+                {fmtNum(skillExperience)} xp
+              </span>
+            )}
+          </div>
+          {skillXpRate != null && skillXpRate > 0 && (
+            <span className="text-xs text-[var(--color-green)]" style={{ fontFamily: "var(--font-mono)" }}>
+              +{fmtNum(skillXpRate)} xp/h
+            </span>
+          )}
         </div>
       )}
     </div>

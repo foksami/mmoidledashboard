@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, index, unique } from "drizzle-orm/sqlite-core";
 
 export const characters = sqliteTable("characters", {
   hashedId: text("hashed_id").primaryKey(),
@@ -83,8 +83,31 @@ export const marketSnapshots = sqliteTable(
     averagePrice: integer("average_price"),
     totalSold: integer("total_sold"),
     tier: integer("tier").default(1),
+    latestPrice: integer("latest_price"),
+    latestSoldAt: text("latest_sold_at"),
   },
   (t) => [index("market_snap_idx").on(t.itemHashedId, t.takenAt)]
+);
+
+/**
+ * Daily market data per item — one row per (item, date).
+ * Populated by scripts/fetch-market-daily.ts from the IdleMMO market-history endpoint.
+ * The API returns up to 30 days of daily history per item.
+ */
+export const marketDaily = sqliteTable(
+  "market_daily",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    itemHashedId: text("item_hashed_id").notNull(),
+    date: text("date").notNull(),          // YYYY-MM-DD
+    avgPrice: integer("avg_price"),        // average price that day
+    totalSold: integer("total_sold"),      // units sold that day
+    fetchedAt: text("fetched_at").notNull(), // when we wrote this row
+  },
+  (t) => [
+    unique("market_daily_uniq").on(t.itemHashedId, t.date),
+    index("market_daily_item_date_idx").on(t.itemHashedId, t.date),
+  ]
 );
 
 export const itemsCatalog = sqliteTable("items_catalog", {
@@ -94,11 +117,32 @@ export const itemsCatalog = sqliteTable("items_catalog", {
   quality: text("quality"),
   vendorPrice: integer("vendor_price"),
   isTradeable: integer("is_tradeable", { mode: "boolean" }),
+  imageUrl: text("image_url"),
   stats: text("stats"),
   requirements: text("requirements"),
   upgradeRequirements: text("upgrade_requirements"),
   updatedAt: text("updated_at"),
 });
+
+export const activitySessions = sqliteTable(
+  "activity_sessions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    hashedId: text("hashed_id")
+      .notNull()
+      .references(() => characters.hashedId, { onDelete: "cascade" }),
+    actionType: text("action_type").notNull(),
+    actionTitle: text("action_title"),
+    startedAt: text("started_at").notNull(),
+    endedAt: text("ended_at"),
+    goldStart: integer("gold_start"),
+    goldEnd: integer("gold_end"),
+    xpSnapStart: text("xp_snap_start"),
+    xpSnapEnd: text("xp_snap_end"),
+    durationSec: integer("duration_sec"),
+  },
+  (t) => [index("activity_sess_idx").on(t.hashedId, t.startedAt)]
+);
 
 export const goals = sqliteTable("goals", {
   id: text("id").primaryKey(),

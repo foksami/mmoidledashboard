@@ -559,6 +559,110 @@ export async function getGoalsWithProgress(
   })
 }
 
+// ── Gathering market data ─────────────────────────────────────────────────────
+
+import { GATHERING_ITEMS, type GatheringItem } from "./gathering"
+import { marketDaily } from "./schema"
+
+export interface MarketTrend {
+  /** % change in avg price: last 7d avg vs prior 7d avg. null if insufficient data. */
+  priceDelta7d: number | null
+  /** % change in volume: last 7d total vs prior 7d total */
+  volumeDelta7d: number | null
+  /** last 14 days of daily rows, oldest first — for sparkline rendering */
+  history14d: Array<{ date: string; avgPrice: number | null; totalSold: number | null }>
+}
+
+export type GatheringMarketRow = GatheringItem & {
+  avgPrice: number | null
+  totalSold: number | null
+  marketValue: number | null
+  takenAt: string | null
+  trend: MarketTrend | null
+}
+
+export async function getGatheringMarketData(): Promise<GatheringMarketRow[]> {
+  const ids = GATHERING_ITEMS.map((i) => i.hashedId)
+
+  // Pull last 14 days of daily data for all gathering items
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10) // YYYY-MM-DD
+
+  const dailyRows = await db
+    .select()
+    .from(marketDaily)
+    .where(gte(marketDaily.date, cutoff))
+    .orderBy(asc(marketDaily.date))
+    .all()
+
+  // Group by item
+  const byItem = new Map<string, typeof dailyRows>()
+  for (const row of dailyRows) {
+    if (!ids.includes(row.itemHashedId)) continue
+    const bucket = byItem.get(row.itemHashedId) ?? []
+    bucket.push(row)
+    byItem.set(row.itemHashedId, bucket)
+  }
+
+  function computeTrend(rows: typeof dailyRows): MarketTrend | null {
+    if (rows.length === 0) return null
+
+    const history14d = rows.map((r) => ({
+      date: r.date,
+      avgPrice: r.avgPrice ?? null,
+      totalSold: r.totalSold ?? null,
+    }))
+
+    // Split into recent 7 vs prior 7
+    const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date))
+    const recent = sorted.slice(0, 7)
+    const prior  = sorted.slice(7, 14)
+
+    function avgPrice(rs: typeof rows) {
+      const valid = rs.filter((r) => r.avgPrice != null)
+      if (valid.length === 0) return null
+      return valid.reduce((s, r) => s + r.avgPrice!, 0) / valid.length
+    }
+    function sumVol(rs: typeof rows) {
+      const valid = rs.filter((r) => r.totalSold != null)
+      if (valid.length === 0) return null
+      return valid.reduce((s, r) => s + r.totalSold!, 0)
+    }
+
+    const recentPrice = avgPrice(recent)
+    const priorPrice  = avgPrice(prior)
+    const recentVol   = sumVol(recent)
+    const priorVol    = sumVol(prior)
+
+    const priceDelta7d =
+      recentPrice != null && priorPrice != null && priorPrice > 0
+        ? Math.round(((recentPrice - priorPrice) / priorPrice) * 100)
+        : null
+
+    const volumeDelta7d =
+      recentVol != null && priorVol != null && priorVol > 0
+        ? Math.round(((recentVol - priorVol) / priorVol) * 100)
+        : null
+
+    return { priceDelta7d, volumeDelta7d, history14d }
+  }
+
+  return GATHERING_ITEMS.map((item) => {
+    const rows = byItem.get(item.hashedId) ?? []
+    const trend = computeTrend(rows)
+
+    // Latest values from most recent daily row
+    const latest = [...rows].sort((a, b) => b.date.localeCompare(a.date))[0]
+    const avgPrice    = latest?.avgPrice ?? null
+    const totalSold   = latest?.totalSold ?? null
+    const marketValue = avgPrice != null && totalSold != null ? avgPrice * totalSold : null
+    const takenAt     = latest?.date ?? null
+
+    return { ...item, avgPrice, totalSold, marketValue, takenAt, trend }
+  }).sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0))
+}
+
 /** XP/h rate for a skill based on last 2 snapshots */
 export async function getSkillXpRate(hashedId: string, skillName: string): Promise<number> {
   const rows = await db

@@ -15,6 +15,7 @@ import {
   getDailyDelta,
   getActivityEfficiency,
   getGoalsWithProgress,
+  getGatheringMarketData,
   CLASS_STAT_PRIORITY,
 } from "@/lib/queries"
 import {
@@ -39,6 +40,7 @@ import { EfficiencyPanel } from "@/components/EfficiencyPanel"
 import { PetPanel } from "@/components/PetPanel"
 import { GoalTrackerPanel } from "@/components/GoalTrackerPanel"
 import { NextMovePanel, NextMoveCollapsed } from "@/components/NextMovePanel"
+import { GatheringPanel, GatheringCollapsed } from "@/components/GatheringPanel"
 import { rankUpgrades, formatHours } from "@/lib/nextMove"
 import { DashboardGrid, type PanelDef } from "@/components/DashboardGrid"
 import { CoinIcon } from "@/components/ui/CoinIcon"
@@ -186,13 +188,18 @@ export default async function DashboardPage({
     return live ? { ...s, level: live.level, experience: live.experience } : s
   })
 
-  // BIS gear, daily delta, efficiency, goals — parallel
-  const [bisSlots, dailyDelta, activityEfficiency, goalProgress] = await Promise.all([
+  // BIS gear, daily delta, efficiency, goals, gathering — parallel
+  const [bisSlots, dailyDelta, activityEfficiency, goalProgress, gatheringItems] = await Promise.all([
     getBISEquipment(mergedSkills, mergedStats, activeCharacter.class),
     getDailyDelta(hashedId),
     getActivityEfficiency(hashedId),
     getGoalsWithProgress(hashedId, mergedSkills, mergedStats, snapshot, skillRates),
+    getGatheringMarketData(),
   ])
+
+  // Gathering skill levels (from merged live data)
+  const miningLevel = mergedSkills.find((s) => s.skillName?.toLowerCase() === "mining")?.level ?? 0
+  const woodcuttingLevel = mergedSkills.find((s) => s.skillName?.toLowerCase() === "woodcutting")?.level ?? 0
 
   // Next Move ranking — pure computation, no extra DB calls
   const cls = activeCharacter.class?.toUpperCase() ?? ""
@@ -314,47 +321,55 @@ export default async function DashboardPage({
 
             <div className="flex-1" />
 
-            {/* Currency + level chips */}
-            <div className="flex items-center gap-3 flex-wrap" style={{ fontFamily: "var(--font-mono)" }}>
-              {snapshot?.gold != null && (
-                <div className="flex items-center gap-1.5 bg-black/30 border border-[var(--color-border-subtle)] rounded-lg px-2.5 py-1">
-                  <CoinIcon amount={snapshot.gold} size={13} />
-                  <span className="text-sm font-semibold text-[var(--color-text-secondary)]">
-                    {fmtNum(snapshot.gold)}
-                  </span>
+            {/* Currency + level chips — prefer live API values, fall back to DB snapshot */}
+            {(() => {
+              const gold       = liveInfo?.gold       ?? snapshot?.gold       ?? null
+              const tokens     = liveInfo?.tokens     ?? snapshot?.tokens     ?? null
+              const shards     = liveInfo?.shards     ?? snapshot?.shards     ?? null
+              const totalLevel = liveInfo?.total_level ?? snapshot?.totalLevel ?? null
+              return (
+                <div className="flex items-center gap-3 flex-wrap" style={{ fontFamily: "var(--font-mono)" }}>
+                  {gold != null && (
+                    <div className="flex items-center gap-1.5 bg-black/30 border border-[var(--color-border-subtle)] rounded-lg px-2.5 py-1">
+                      <CoinIcon amount={gold} size={13} />
+                      <span className="text-sm font-semibold text-[var(--color-text-secondary)]">
+                        {fmtNum(gold)}
+                      </span>
+                    </div>
+                  )}
+                  {tokens != null && (
+                    <div className="flex items-center gap-1.5 bg-black/30 border border-[var(--color-border-subtle)] rounded-lg px-2.5 py-1">
+                      <span className="text-[var(--color-blue)] text-sm leading-none">◈</span>
+                      <span className="text-sm font-semibold text-[var(--color-text-secondary)]">
+                        {fmtNum(tokens)}
+                      </span>
+                    </div>
+                  )}
+                  {shards != null && (
+                    <div className="flex items-center gap-1.5 bg-black/30 border border-[var(--color-border-subtle)] rounded-lg px-2.5 py-1">
+                      <span className="text-[var(--color-purple)] text-sm leading-none">◇</span>
+                      <span className="text-sm font-semibold text-[var(--color-text-secondary)]">
+                        {fmtNum(shards)}
+                      </span>
+                    </div>
+                  )}
+                  {totalLevel != null && (
+                    <div
+                      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 border"
+                      style={{ background: "rgba(240,193,74,0.08)", borderColor: "rgba(240,193,74,0.25)" }}
+                    >
+                      <span className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-widest">Lv</span>
+                      <span
+                        className="text-sm font-bold text-[var(--color-gold)]"
+                        style={{ textShadow: "0 0 12px rgba(240,193,74,0.4)" }}
+                      >
+                        {totalLevel}
+                      </span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {snapshot?.tokens != null && (
-                <div className="flex items-center gap-1.5 bg-black/30 border border-[var(--color-border-subtle)] rounded-lg px-2.5 py-1">
-                  <span className="text-[var(--color-blue)] text-sm leading-none">◈</span>
-                  <span className="text-sm font-semibold text-[var(--color-text-secondary)]">
-                    {fmtNum(snapshot.tokens)}
-                  </span>
-                </div>
-              )}
-              {snapshot?.shards != null && (
-                <div className="flex items-center gap-1.5 bg-black/30 border border-[var(--color-border-subtle)] rounded-lg px-2.5 py-1">
-                  <span className="text-[var(--color-purple)] text-sm leading-none">◇</span>
-                  <span className="text-sm font-semibold text-[var(--color-text-secondary)]">
-                    {fmtNum(snapshot.shards)}
-                  </span>
-                </div>
-              )}
-              {snapshot?.totalLevel != null && (
-                <div
-                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 border"
-                  style={{ background: "rgba(240,193,74,0.08)", borderColor: "rgba(240,193,74,0.25)" }}
-                >
-                  <span className="text-[11px] text-[var(--color-text-muted)] uppercase tracking-widest">Lv</span>
-                  <span
-                    className="text-sm font-bold text-[var(--color-gold)]"
-                    style={{ textShadow: "0 0 12px rgba(240,193,74,0.4)" }}
-                  >
-                    {snapshot.totalLevel}
-                  </span>
-                </div>
-              )}
-            </div>
+              )
+            })()}
           </div>
         </div>
 
@@ -470,6 +485,25 @@ export default async function DashboardPage({
               badge: "7d",
               badgeColor: "text-[var(--color-text-muted)]",
               content: <EfficiencyPanel activities={activityEfficiency} />,
+            },
+            {
+              id: "gathering",
+              title: "Gathering Market",
+              icon: "⛏",
+              content: (
+                <GatheringPanel
+                  items={gatheringItems}
+                  miningLevel={miningLevel}
+                  woodcuttingLevel={woodcuttingLevel}
+                />
+              ),
+              collapsedContent: (
+                <GatheringCollapsed
+                  items={gatheringItems}
+                  miningLevel={miningLevel}
+                  woodcuttingLevel={woodcuttingLevel}
+                />
+              ),
             },
           ]
 

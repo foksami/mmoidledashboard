@@ -1,5 +1,6 @@
 import React from "react"
 import type { CharacterEffect } from "@/lib/idlemmo"
+import { fmtTime } from "@/lib/fmt"
 
 interface EffectsPanelProps {
   effects: CharacterEffect[]
@@ -90,7 +91,7 @@ export function EffectsPanel({ effects }: EffectsPanelProps) {
                   </span>
                   {e.expire_at && (
                     <span className="text-[10px] text-[var(--color-text-muted)]">
-                      until {new Date(e.expire_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      until {fmtTime(e.expire_at)}
                     </span>
                   )}
                 </div>

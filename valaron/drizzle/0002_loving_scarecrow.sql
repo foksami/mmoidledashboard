@@ -1,0 +1,1 @@
+ALTER TABLE `items_catalog` ADD `image_url` text;

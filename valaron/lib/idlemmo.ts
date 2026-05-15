@@ -130,24 +130,43 @@ const limiter = new RateLimiter();
 
 // --- Fetch wrapper ---
 
-async function apiFetch<T>(path: string): Promise<T> {
+async function apiFetch<T>(path: string, deadlineMs = 8000): Promise<T> {
+  // Race: either complete within deadlineMs or throw (catches rate-limiter hangs too)
+  return Promise.race([
+    apiFetchInner<T>(path),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`API timeout: ${path}`)), deadlineMs)
+    ),
+  ])
+}
+
+async function apiFetchInner<T>(path: string): Promise<T> {
   await limiter.throttle();
 
   const apiKey = process.env.IDLEMMO_API_KEY;
   if (!apiKey) throw new Error("IDLEMMO_API_KEY not set");
 
-  const res = await fetch(`${BASE}${path}`, {
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "User-Agent": "Valaron/0.1 (Contact: michalfoksa@gmail.com)",
-      Accept: "application/json",
-    },
-    next: { revalidate: 0 },
-  });
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 8000)
+
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "User-Agent": "Valaron/0.1 (Contact: michalfoksa@gmail.com)",
+        Accept: "application/json",
+      },
+      next: { revalidate: 0 },
+      signal: controller.signal,
+    })
+  } finally {
+    clearTimeout(timeout)
+  }
 
   if (res.status === 429) {
     await new Promise((r) => setTimeout(r, 5000));
-    return apiFetch<T>(path);
+    return apiFetchInner<T>(path);
   }
 
   if (!res.ok) {
@@ -185,6 +204,28 @@ export async function getCharacterEffects(hashedId: string): Promise<CharacterEf
 export async function getWorldBosses(): Promise<WorldBoss[]> {
   const data = await apiFetch<{ world_bosses: WorldBoss[] }>("/combat/world_bosses/list");
   return data.world_bosses;
+}
+
+export interface LocationWeather {
+  name: string;
+  buffs: string[];
+}
+
+export interface LocationForecast {
+  starts_at: string;
+  ends_at: string;
+  weathers: LocationWeather[];
+}
+
+export interface WorldLocation {
+  id: number;
+  name: string;
+  forecast?: LocationForecast[];
+}
+
+export async function getWorldLocations(): Promise<WorldLocation[]> {
+  const data = await apiFetch<{ locations: WorldLocation[] }>("/world/locations/list");
+  return data.locations;
 }
 
 export async function getShrineProgress(): Promise<ShrineProgress[]> {

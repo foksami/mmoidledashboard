@@ -5,6 +5,7 @@ import type { WorldBoss } from "@/lib/idlemmo"
 
 interface WorldBossRadarProps {
   bosses: WorldBoss[]
+  combatLevel?: number
 }
 
 function formatCountdown(ms: number): string {
@@ -43,12 +44,22 @@ function StatusBadge({ boss, now }: { boss: WorldBoss; now: number }) {
   }
 
   if (status === "READY_FOR_LOBBY") {
+    const killWindow = battle_ends_at ? new Date(battle_ends_at).getTime() - now : null
     return (
       <div className="flex items-center gap-1.5 flex-shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-green)] flex-shrink-0" />
         <span className="text-xs font-semibold text-[var(--color-green)] uppercase tracking-wider">
           Open
         </span>
+        {killWindow != null && killWindow > 0 && (
+          <span
+            className="text-xs text-[var(--color-text-muted)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+            suppressHydrationWarning
+          >
+            kill by {formatCountdown(killWindow)}
+          </span>
+        )}
       </div>
     )
   }
@@ -74,7 +85,7 @@ function StatusBadge({ boss, now }: { boss: WorldBoss; now: number }) {
   )
 }
 
-export function WorldBossRadar({ bosses }: WorldBossRadarProps) {
+export function WorldBossRadar({ bosses, combatLevel }: WorldBossRadarProps) {
   const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
@@ -82,13 +93,15 @@ export function WorldBossRadar({ bosses }: WorldBossRadarProps) {
     return () => clearInterval(id)
   }, [])
 
-  if (bosses.length === 0) {
-    return <p className="text-sm text-[var(--color-text-muted)]">No boss data.</p>
+  const visible = combatLevel != null ? bosses.filter((b) => b.level <= combatLevel) : bosses
+
+  if (visible.length === 0) {
+    return <p className="text-sm text-[var(--color-text-muted)]">No bosses in your level range.</p>
   }
 
   return (
     <div className="divide-y divide-[var(--color-border-subtle)]">
-      {bosses.map((boss) => (
+      {visible.map((boss) => (
         <div key={boss.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="min-w-0">
@@ -106,7 +119,10 @@ export function WorldBossRadar({ bosses }: WorldBossRadarProps) {
                   Lv {boss.level}
                 </span>
               </div>
-              <span className="text-xs text-[var(--color-text-dim)]">{boss.location.name}</span>
+              <span className="text-xs text-[var(--color-text-muted)] flex items-center gap-1">
+                <span className="opacity-50">📍</span>
+                {boss.location.name}
+              </span>
             </div>
           </div>
           <StatusBadge boss={boss} now={now} />
