@@ -4,7 +4,8 @@
  *
  * Usage:
  *   npx tsx scripts/fetch-market-daily.ts              # all items
- *   npx tsx scripts/fetch-market-daily.ts --gathering  # gathering only (faster, ~70s)
+ *   npx tsx scripts/fetch-market-daily.ts --gathering  # gathering only (~70s)
+ *   npx tsx scripts/fetch-market-daily.ts --smelting   # gathering + bars (~140s)
  *   npx tsx scripts/fetch-market-daily.ts --gear       # gear catalog only
  *
  * Rate limit: 18 req/min → 3.5s delay between requests.
@@ -21,6 +22,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3"
 import { sql } from "drizzle-orm"
 import { marketDaily, itemsCatalog } from "../lib/schema"
 import { GATHERING_ITEMS } from "../lib/gathering"
+import { SMELTING_RECIPES, COAL_ORE_ID } from "../lib/smelting"
 
 const dbPath = process.env.DB_PATH ?? "./valaron.db"
 const sqlite = new Database(dbPath)
@@ -102,7 +104,8 @@ async function fetchAndStore(hashedId: string, name: string): Promise<void> {
 async function main() {
   const args = process.argv.slice(2)
   const onlyGathering = args.includes("--gathering")
-  const onlyGear = args.includes("--gear")
+  const onlySmelting  = args.includes("--smelting")
+  const onlyGear      = args.includes("--gear")
 
   const items: Array<{ hashedId: string; name: string }> = []
 
@@ -110,6 +113,16 @@ async function main() {
     for (const g of GATHERING_ITEMS) {
       items.push({ hashedId: g.hashedId, name: g.name })
     }
+  }
+
+  // Add metal bars + coal for smelting profitability (--smelting or --all)
+  if (!onlyGathering && !onlyGear) {
+    for (const r of SMELTING_RECIPES) {
+      if (!items.find((i) => i.hashedId === r.barHashedId)) {
+        items.push({ hashedId: r.barHashedId, name: r.barName })
+      }
+    }
+    // coal is already in GATHERING_ITEMS, no duplicate needed
   }
 
   if (!onlyGathering) {

@@ -16,6 +16,9 @@ import {
   getActivityEfficiency,
   getGoalsWithProgress,
   getGatheringMarketData,
+  getSmeltingData,
+  getGearMarketData,
+  getCraftingData,
   CLASS_STAT_PRIORITY,
 } from "@/lib/queries"
 import {
@@ -41,6 +44,10 @@ import { PetPanel } from "@/components/PetPanel"
 import { GoalTrackerPanel } from "@/components/GoalTrackerPanel"
 import { NextMovePanel, NextMoveCollapsed } from "@/components/NextMovePanel"
 import { GatheringPanel, GatheringCollapsed } from "@/components/GatheringPanel"
+import { SmeltingPanel, SmeltingCollapsed } from "@/components/SmeltingPanel"
+import { GearPricesPanel } from "@/components/market/GearPricesPanel"
+import { CraftingPanel } from "@/components/market/CraftingPanel"
+import { TabSwitcher, TabBar, TabPanel } from "@/components/TabSwitcher"
 import { rankUpgrades, formatHours } from "@/lib/nextMove"
 import { DashboardGrid, type PanelDef } from "@/components/DashboardGrid"
 import { CoinIcon } from "@/components/ui/CoinIcon"
@@ -188,18 +195,29 @@ export default async function DashboardPage({
     return live ? { ...s, level: live.level, experience: live.experience } : s
   })
 
-  // BIS gear, daily delta, efficiency, goals, gathering — parallel
-  const [bisSlots, dailyDelta, activityEfficiency, goalProgress, gatheringItems] = await Promise.all([
+  // BIS gear, daily delta, efficiency, goals, gathering, market — parallel
+  const [bisSlots, dailyDelta, activityEfficiency, goalProgress, gatheringItems, smeltingRows, gearGroups, craftingRows] = await Promise.all([
     getBISEquipment(mergedSkills, mergedStats, activeCharacter.class),
     getDailyDelta(hashedId),
     getActivityEfficiency(hashedId),
     getGoalsWithProgress(hashedId, mergedSkills, mergedStats, snapshot, skillRates),
     getGatheringMarketData(),
+    getSmeltingData(),
+    getGearMarketData(),
+    getCraftingData(),
   ])
 
   // Gathering skill levels (from merged live data)
-  const miningLevel = mergedSkills.find((s) => s.skillName?.toLowerCase() === "mining")?.level ?? 0
+  const miningLevel      = mergedSkills.find((s) => s.skillName?.toLowerCase() === "mining")?.level      ?? 0
   const woodcuttingLevel = mergedSkills.find((s) => s.skillName?.toLowerCase() === "woodcutting")?.level ?? 0
+  const smeltingLevel    = mergedSkills.find((s) => s.skillName?.toLowerCase() === "smelting")?.level    ?? 0
+
+  // Full skill level map for crafting gate checks (any recipe skill)
+  const skillLevelMap = new Map<string, number>(
+    mergedSkills
+      .filter((s) => s.skillName != null && s.level != null)
+      .map((s) => [s.skillName!.toLowerCase(), s.level!])
+  )
 
   // Next Move ranking — pure computation, no extra DB calls
   const cls = activeCharacter.class?.toUpperCase() ?? ""
@@ -373,9 +391,9 @@ export default async function DashboardPage({
           </div>
         </div>
 
-        {/* Draggable + collapsible panel grid */}
+        {/* Tab switcher */}
         {(() => {
-          const leftPanels: PanelDef[] = [
+          const mainLeftPanels: PanelDef[] = [
             {
               id: "action",
               title: "Current Action",
@@ -486,28 +504,9 @@ export default async function DashboardPage({
               badgeColor: "text-[var(--color-text-muted)]",
               content: <EfficiencyPanel activities={activityEfficiency} />,
             },
-            {
-              id: "gathering",
-              title: "Gathering Market",
-              icon: "⛏",
-              content: (
-                <GatheringPanel
-                  items={gatheringItems}
-                  miningLevel={miningLevel}
-                  woodcuttingLevel={woodcuttingLevel}
-                />
-              ),
-              collapsedContent: (
-                <GatheringCollapsed
-                  items={gatheringItems}
-                  miningLevel={miningLevel}
-                  woodcuttingLevel={woodcuttingLevel}
-                />
-              ),
-            },
           ]
 
-          const rightPanels: PanelDef[] = [
+          const mainRightPanels: PanelDef[] = [
             {
               id: "daily",
               title: "Last 24h",
@@ -594,7 +593,70 @@ export default async function DashboardPage({
               : []),
           ]
 
-          return <DashboardGrid leftPanels={leftPanels} rightPanels={rightPanels} />
+          const marketLeftPanels: PanelDef[] = [
+            {
+              id: "gathering",
+              title: "Gathering Market",
+              icon: "⛏",
+              content: (
+                <GatheringPanel
+                  items={gatheringItems}
+                  miningLevel={miningLevel}
+                  woodcuttingLevel={woodcuttingLevel}
+                />
+              ),
+              collapsedContent: (
+                <GatheringCollapsed
+                  items={gatheringItems}
+                  miningLevel={miningLevel}
+                  woodcuttingLevel={woodcuttingLevel}
+                />
+              ),
+            },
+            {
+              id: "smelting",
+              title: "Smelting Profit",
+              icon: "🔥",
+              content: <SmeltingPanel rows={smeltingRows} smeltingLevel={smeltingLevel} />,
+              collapsedContent: <SmeltingCollapsed rows={smeltingRows} smeltingLevel={smeltingLevel} />,
+            },
+            {
+              id: "crafting",
+              title: "Crafting",
+              icon: "⚒️",
+              badge: craftingRows.length > 0 ? `${craftingRows.length} recipes` : undefined,
+              badgeColor: "text-[var(--color-text-muted)]",
+              content: <CraftingPanel rows={craftingRows} skillLevels={skillLevelMap} />,
+            },
+          ]
+
+          const marketRightPanels: PanelDef[] = [
+            {
+              id: "gear-prices",
+              title: "Gear Prices",
+              icon: "🛒",
+              badge: gearGroups.length > 0 ? `${gearGroups.reduce((s, g) => s + g.items.length, 0)} items` : undefined,
+              badgeColor: "text-[var(--color-text-muted)]",
+              content: <GearPricesPanel groups={gearGroups} />,
+            },
+          ]
+
+          return (
+            <TabSwitcher>
+              {/* Tab bar */}
+              <div className="flex items-center gap-2 mb-1">
+                <TabBar />
+              </div>
+
+              <TabPanel id="main">
+                <DashboardGrid leftPanels={mainLeftPanels} rightPanels={mainRightPanels} />
+              </TabPanel>
+
+              <TabPanel id="market">
+                <DashboardGrid leftPanels={marketLeftPanels} rightPanels={marketRightPanels} />
+              </TabPanel>
+            </TabSwitcher>
+          )
         })()}
       </div>
     </div>

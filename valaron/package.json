@@ -11,8 +11,10 @@
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
     "market:gathering": "tsx scripts/fetch-market-daily.ts --gathering",
+    "market:smelting": "tsx scripts/fetch-market-daily.ts --smelting",
     "market:gear": "tsx scripts/fetch-market-daily.ts --gear",
-    "market:all": "tsx scripts/fetch-market-daily.ts"
+    "market:all": "tsx scripts/fetch-market-daily.ts",
+    "recipes:fetch": "tsx scripts/fetch-crafting-recipes.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

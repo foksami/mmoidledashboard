@@ -89,6 +89,15 @@ Fetches 30 days of daily price/volume history for all ores and logs.
 npm run market:gathering
 ```
 
+### 7b. Seed crafting recipes (one-time, ~25 min)
+
+Fetches all 370+ recipes from the IdleMMO items API and stores them in the DB.
+Required for the **Crafting** panel in the Market tab.
+
+```bash
+npm run recipes:fetch
+```
+
 ### 8. Run the poller (background process)
 
 The poller collects character snapshots every time it runs. It needs to keep running
@@ -120,6 +129,7 @@ npm run migrate
 npx tsx scripts/fetch-catalog.ts  # ~15 min, one-time
 npx tsx scripts/fetch-market.ts   # ~16 min, one-time
 npm run market:gathering           # ~70 sec, one-time
+npm run recipes:fetch              # ~25 min, one-time (crafting tab)
 npm run poll &                     # background poller
 npm run dev
 ```
@@ -212,8 +222,10 @@ For the market refresh, add a systemd timer or use a crontab entry alongside sys
 | `npm run poll` | Snapshot character (skills, gold, action, sessions) | Every 5 min |
 | `npm run migrate` | Apply DB schema migrations | After `git pull` |
 | `npm run market:gathering` | Refresh 30d daily history for ores + logs (~70s) | Daily |
+| `npm run market:smelting` | Refresh market history for ores + bars (~140s) | Daily |
 | `npm run market:gear` | Refresh market prices for all gear (~16 min) | Weekly |
-| `npm run market:all` | Both gathering + gear | — |
+| `npm run market:all` | All items — gathering + bars + gear | — |
+| `npm run recipes:fetch` | Seed crafting recipes from API (~25 min) | Once |
 | `npm run db:generate` | Generate Drizzle migration after schema changes | Dev only |
 | `npm run db:studio` | Open Drizzle Studio (visual DB browser) | Dev only |
 | `npx tsx scripts/fetch-catalog.ts` | Seed gear catalog from API | Once |
@@ -256,6 +268,7 @@ npm run migrate
 npx tsx scripts/fetch-catalog.ts
 npx tsx scripts/fetch-market.ts
 npm run market:gathering
+npm run recipes:fetch          # optional, ~25 min
 npm run build
 
 # Start with PM2

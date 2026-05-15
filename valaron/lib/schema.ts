@@ -158,6 +158,26 @@ export const goals = sqliteTable("goals", {
   completedAt: text("completed_at"),
 });
 
+/**
+ * Crafting recipes fetched from the IdleMMO items API (type=recipe).
+ * materials: JSON array of {hashedItemId, itemName, quantity}
+ * maxUses: 0 = permanent unlock (buy once, craft forever), 1+ = consumed per craft
+ */
+export const craftingRecipes = sqliteTable("crafting_recipes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  recipeItemId: text("recipe_item_id").notNull().unique(),
+  recipeItemName: text("recipe_item_name"),
+  outputItemId: text("output_item_id").notNull(),
+  outputItemName: text("output_item_name"),
+  skill: text("skill"),
+  levelRequired: integer("level_required"),
+  maxUses: integer("max_uses"),          // 0=permanent, 1+=consumed per craft
+  expPerCraft: integer("exp_per_craft"),
+  materials: text("materials"),          // JSON: [{hashedItemId, itemName, quantity}]
+  recipeVendorPrice: integer("recipe_vendor_price"),
+  fetchedAt: text("fetched_at").notNull(),
+});
+
 export const aiBriefs = sqliteTable("ai_briefs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   hashedId: text("hashed_id")

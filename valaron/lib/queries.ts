@@ -663,6 +663,258 @@ export async function getGatheringMarketData(): Promise<GatheringMarketRow[]> {
   }).sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0))
 }
 
+// ── Smelting profitability ────────────────────────────────────────────────────
+
+import { SMELTING_RECIPES, SMELTING_ALL_IDS, type SmeltingRecipe } from "./smelting"
+
+export interface SmeltingRow {
+  recipe: SmeltingRecipe
+  barPrice: number | null
+  orePrice: number | null
+  coalPrice: number | null
+  /** bar_price - ore_price - coal_price. null if any price missing. */
+  profitPerBar: number | null
+  /** profitPerBar × (3600 / smeltTimeSec) */
+  profitPerHour: number | null
+  /** bars craftable per hour based on smelt time */
+  barsPerHour: number
+  /** exp per hour */
+  expPerHour: number
+}
+
+export async function getSmeltingData(): Promise<SmeltingRow[]> {
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+
+  const dailyRows = await db
+    .select()
+    .from(marketDaily)
+    .where(gte(marketDaily.date, cutoff))
+    .orderBy(desc(marketDaily.date))
+    .all()
+
+  // Latest price per item from market_daily
+  const priceMap = new Map<string, number>()
+  for (const row of dailyRows) {
+    if (!SMELTING_ALL_IDS.includes(row.itemHashedId)) continue
+    if (!priceMap.has(row.itemHashedId) && row.avgPrice != null) {
+      priceMap.set(row.itemHashedId, row.avgPrice)
+    }
+  }
+
+  return SMELTING_RECIPES.map((recipe) => {
+    const barPrice  = priceMap.get(recipe.barHashedId)  ?? null
+    const orePrice  = priceMap.get(recipe.oreHashedId)  ?? null
+    const coalPrice = priceMap.get(recipe.coalHashedId) ?? null
+
+    const profitPerBar =
+      barPrice != null && orePrice != null && coalPrice != null
+        ? barPrice - orePrice - coalPrice
+        : null
+
+    const barsPerHour = Math.floor(3600 / recipe.smeltTimeSec)
+    const expPerHour  = Math.round(barsPerHour * recipe.expPerBar)
+
+    const profitPerHour =
+      profitPerBar != null ? Math.round(profitPerBar * barsPerHour) : null
+
+    return { recipe, barPrice, orePrice, coalPrice, profitPerBar, profitPerHour, barsPerHour, expPerHour }
+  })
+}
+
+// ── Gear market prices ────────────────────────────────────────────────────────
+
+import { craftingRecipes } from "./schema"
+
+const SLOT_ORDER = [
+  "HELMET", "CHESTPLATE", "GAUNTLETS", "BOOTS",
+  "SWORD", "BOW", "DAGGER", "SHIELD",
+]
+
+export interface GearMarketItem {
+  hashedId: string
+  name: string
+  type: string
+  quality: string
+  imageUrl: string | null
+  stats: Record<string, number>
+  requirements: Record<string, number>
+  vendorPrice: number | null
+  marketPrice: number | null
+  marketDate: string | null
+  /** how many sold on last market_daily row for this item */
+  lastSold: number | null
+}
+
+export interface GearMarketGroup {
+  slot: string
+  items: GearMarketItem[]
+}
+
+const GEAR_SLOTS = new Set(SLOT_ORDER)
+
+export async function getGearMarketData(): Promise<GearMarketGroup[]> {
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+
+  const [catalogRows, dailyRows] = await Promise.all([
+    db.select().from(itemsCatalog).all(),
+    db.select().from(marketDaily).where(gte(marketDaily.date, cutoff)).orderBy(desc(marketDaily.date)).all(),
+  ])
+
+  // Latest price per item from market_daily
+  const priceMap = new Map<string, { price: number | null; date: string; sold: number | null }>()
+  for (const row of dailyRows) {
+    if (!priceMap.has(row.itemHashedId)) {
+      priceMap.set(row.itemHashedId, {
+        price: row.avgPrice ?? null,
+        date: row.date,
+        sold: row.totalSold ?? null,
+      })
+    }
+  }
+
+  const gearItems = catalogRows.filter((i) => i.type != null && GEAR_SLOTS.has(i.type))
+
+  const groups = new Map<string, GearMarketItem[]>()
+  for (const item of gearItems) {
+    const slot = item.type!
+    const market = priceMap.get(item.hashedId)
+    const entry: GearMarketItem = {
+      hashedId: item.hashedId,
+      name: item.name ?? item.hashedId,
+      type: slot,
+      quality: item.quality ?? "STANDARD",
+      imageUrl: item.imageUrl ?? null,
+      stats: item.stats ? (JSON.parse(item.stats) as Record<string, number>) : {},
+      requirements: item.requirements ? (JSON.parse(item.requirements) as Record<string, number>) : {},
+      vendorPrice: item.vendorPrice ?? null,
+      marketPrice: market?.price ?? null,
+      marketDate: market?.date ?? null,
+      lastSold: market?.sold ?? null,
+    }
+    const bucket = groups.get(slot) ?? []
+    bucket.push(entry)
+    groups.set(slot, bucket)
+  }
+
+  // Sort each slot by quality desc, then market price desc
+  for (const [, items] of groups) {
+    items.sort((a, b) => {
+      const qDiff = (QUALITY_RANK[b.quality] ?? 0) - (QUALITY_RANK[a.quality] ?? 0)
+      if (qDiff !== 0) return qDiff
+      return (b.marketPrice ?? 0) - (a.marketPrice ?? 0)
+    })
+  }
+
+  return SLOT_ORDER
+    .filter((s) => groups.has(s))
+    .map((s) => ({ slot: s, items: groups.get(s)! }))
+}
+
+// ── Crafting profitability ────────────────────────────────────────────────────
+
+export interface CraftingMaterial {
+  hashedItemId: string
+  itemName: string
+  quantity: number
+  unitPrice: number | null
+  totalCost: number | null
+}
+
+export interface CraftingRecipeRow {
+  recipeItemId: string
+  recipeItemName: string | null
+  outputItemId: string
+  outputItemName: string | null
+  skill: string | null
+  levelRequired: number | null
+  maxUses: number | null
+  /** true = permanent unlock (buy recipe once, craft forever) */
+  isPermanent: boolean
+  expPerCraft: number | null
+  recipeVendorPrice: number | null
+  materials: CraftingMaterial[]
+  outputPrice: number | null
+  materialCost: number | null
+  /** craftCost: recipe vendor price added per craft if maxUses != 0, else 0 */
+  craftCost: number
+  /** outputPrice - materialCost - craftCost. null if any price missing */
+  profitPerCraft: number | null
+}
+
+export async function getCraftingData(): Promise<CraftingRecipeRow[]> {
+  const cutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .slice(0, 10)
+
+  const [recipes, dailyRows] = await Promise.all([
+    db.select().from(craftingRecipes).all(),
+    db.select().from(marketDaily).where(gte(marketDaily.date, cutoff)).orderBy(desc(marketDaily.date)).all(),
+  ])
+
+  // Latest price per item from market_daily
+  const priceMap = new Map<string, number>()
+  for (const row of dailyRows) {
+    if (!priceMap.has(row.itemHashedId) && row.avgPrice != null) {
+      priceMap.set(row.itemHashedId, row.avgPrice)
+    }
+  }
+
+  return recipes.map((r) => {
+    const isPermanent = r.maxUses === 0
+    const craftCost = isPermanent ? 0 : (r.recipeVendorPrice ?? 0)
+
+    let parsedMats: Array<{ hashedItemId: string; itemName: string; quantity: number }> = []
+    try {
+      parsedMats = r.materials ? JSON.parse(r.materials) : []
+    } catch {}
+
+    const materials: CraftingMaterial[] = parsedMats.map((m) => {
+      const unitPrice = priceMap.get(m.hashedItemId) ?? null
+      return {
+        hashedItemId: m.hashedItemId,
+        itemName: m.itemName,
+        quantity: m.quantity,
+        unitPrice,
+        totalCost: unitPrice != null ? unitPrice * m.quantity : null,
+      }
+    })
+
+    const outputPrice = priceMap.get(r.outputItemId) ?? null
+
+    const allMatsHavePrice = materials.every((m) => m.totalCost != null)
+    const materialCost = allMatsHavePrice
+      ? materials.reduce((sum, m) => sum + (m.totalCost ?? 0), 0)
+      : null
+
+    const profitPerCraft =
+      outputPrice != null && materialCost != null
+        ? outputPrice - materialCost - craftCost
+        : null
+
+    return {
+      recipeItemId: r.recipeItemId,
+      recipeItemName: r.recipeItemName,
+      outputItemId: r.outputItemId,
+      outputItemName: r.outputItemName,
+      skill: r.skill,
+      levelRequired: r.levelRequired,
+      maxUses: r.maxUses,
+      isPermanent,
+      expPerCraft: r.expPerCraft,
+      recipeVendorPrice: r.recipeVendorPrice,
+      materials,
+      outputPrice,
+      materialCost,
+      craftCost,
+      profitPerCraft,
+    }
+  }).sort((a, b) => (b.profitPerCraft ?? -Infinity) - (a.profitPerCraft ?? -Infinity))
+}
+
 /** XP/h rate for a skill based on last 2 snapshots */
 export async function getSkillXpRate(hashedId: string, skillName: string): Promise<number> {
   const rows = await db
