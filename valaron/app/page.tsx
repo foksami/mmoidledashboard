@@ -128,13 +128,13 @@ export default async function DashboardPage({
   const liveActionType = liveAction?.type ?? null
   const liveExpiresAt = liveAction?.expires_at ?? null
 
-  // Only reuse DB detectedAt if it's the same session — same type AND same expiresAt (±2 min)
-  const sameSession = (() => {
-    if (!liveActionType || !dbAction?.actionType || !liveExpiresAt || !dbAction.expiresAt) return false
-    if (liveActionType.toUpperCase() !== dbAction.actionType.toUpperCase()) return false
-    const diff = Math.abs(new Date(liveExpiresAt).getTime() - new Date(dbAction.expiresAt).getTime())
-    return diff < 2 * 60 * 1000
-  })()
+  // Reuse DB detectedAt if action type still matches — expiresAt changes every ~23s tick so useless for comparison
+  const sameSession = !!(
+    liveActionType &&
+    dbAction?.actionType &&
+    liveActionType.toUpperCase() === dbAction.actionType.toUpperCase() &&
+    dbAction.detectedAt
+  )
 
   const action = {
     actionType: liveActionType ?? dbAction?.actionType ?? null,
