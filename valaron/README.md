@@ -35,7 +35,7 @@ A personal dashboard for [IdleMMO](https://idle-mmo.com) — tracks your charact
 
 ```bash
 git clone https://github.com/foksami/mmoidledashboard.git
-cd mmoidledashboard
+cd mmoidledashboard/valaron
 npm install
 ```
 
@@ -148,6 +148,16 @@ npm run poll &                     # background poller
 npm run dev
 ```
 
+### Regenerating seed data (after you run a fresh fetch)
+
+All commands run from inside the `valaron/` directory:
+
+```bash
+# After running market:gear or market:gathering, update the shared seed:
+npm run seed:export
+git add data/seed.json && git commit -m "chore: refresh seed data" && git push
+```
+
 ---
 
 ## Keeping data fresh: cron jobs
@@ -165,13 +175,13 @@ Add these lines (replace `/path/to/mmoidledashboard` with your actual path):
 
 ```cron
 # Poll character data every 5 minutes
-*/5 * * * * cd /path/to/mmoidledashboard && npm run poll >> /tmp/valaron-poll.log 2>&1
+*/5 * * * * cd /path/to/mmoidledashboard/valaron && npm run poll >> /tmp/valaron-poll.log 2>&1
 
 # Refresh gathering market data daily at 6:23am
-23 6 * * * cd /path/to/mmoidledashboard && npm run market:gathering >> /tmp/valaron-market.log 2>&1
+23 6 * * * cd /path/to/mmoidledashboard/valaron && npm run market:gathering >> /tmp/valaron-market.log 2>&1
 
 # Refresh gear market prices weekly (Sunday 3am, takes ~16 min)
-0 3 * * 0 cd /path/to/mmoidledashboard && npm run market:gear >> /tmp/valaron-market-gear.log 2>&1
+0 3 * * 0 cd /path/to/mmoidledashboard/valaron && npm run market:gear >> /tmp/valaron-market-gear.log 2>&1
 ```
 
 ### Option B: PM2 (recommended for always-on servers)
@@ -209,8 +219,8 @@ After=network.target
 [Service]
 Type=simple
 User=youruser
-WorkingDirectory=/path/to/mmoidledashboard
-EnvironmentFile=/path/to/mmoidledashboard/.env.local
+WorkingDirectory=/path/to/mmoidledashboard/valaron
+EnvironmentFile=/path/to/mmoidledashboard/valaron/.env.local
 ExecStart=/usr/bin/npm run poll
 Restart=always
 RestartSec=30
@@ -277,14 +287,15 @@ Cheapest option (~€4/month), full control, SQLite works perfectly.
 ```bash
 # On server
 git clone https://github.com/foksami/mmoidledashboard.git
-cd mmoidledashboard
+cd mmoidledashboard/valaron
 npm install
 cp .env.example .env.local   # add your key
 npm run migrate
-npx tsx scripts/fetch-catalog.ts
-npx tsx scripts/fetch-market.ts
-npm run market:gathering
-npm run recipes:fetch          # optional, ~25 min
+npm run seed:import           # instant — or run fresh fetches below
+# npx tsx scripts/fetch-catalog.ts
+# npx tsx scripts/fetch-market.ts
+# npm run market:gathering
+# npm run recipes:fetch       # optional, ~25 min
 npm run build
 
 # Start with PM2
