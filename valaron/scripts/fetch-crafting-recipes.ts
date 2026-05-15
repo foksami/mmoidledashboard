@@ -96,7 +96,8 @@ async function fetchAllRecipeItems(): Promise<Array<{ hashedId: string; name: st
 }
 
 async function fetchRecipeDetail(hashedId: string): Promise<RecipeDetail> {
-  return apiFetch<RecipeDetail>(`/items/${hashedId}`)
+  const res = await apiFetch<{ item: RecipeDetail }>(`/item/${hashedId}/inspect`)
+  return res.item
 }
 
 async function main() {
