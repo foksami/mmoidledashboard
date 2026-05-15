@@ -4,7 +4,7 @@ import type { UpgradeCandidate, UpgradeRequirement } from "@/lib/nextMove"
 import { formatHours } from "@/lib/nextMove"
 
 const SLOT_LABEL: Record<string, string> = {
-  HELMET: "Helmet", CHESTPLATE: "Chest", GAUNTLETS: "Gauntlets",
+  HELMET: "Helmet", CHESTPLATE: "Chestplate", GAUNTLETS: "Gauntlets",
   BOOTS: "Boots", SWORD: "Sword", BOW: "Bow", DAGGER: "Dagger", SHIELD: "Shield",
 }
 
