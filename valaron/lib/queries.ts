@@ -887,12 +887,21 @@ export interface CraftingRecipeRow {
   expPerCraft: number | null
   recipeVendorPrice: number | null
   materials: CraftingMaterial[]
+  /** Sell listings avg — what you'd get listing on market */
   outputPrice: number | null
+  /** Buy orders avg — what buyers pay right now (instant sell) */
+  outputBuyPrice: number | null
+  /** Vendor sell price — guaranteed instant, no market fee */
+  outputVendorPrice: number | null
   materialCost: number | null
   /** craftCost: recipe vendor price added per craft if maxUses != 0, else 0 */
   craftCost: number
   /** outputPrice - materialCost - craftCost. null if any price missing */
   profitPerCraft: number | null
+  /** outputBuyPrice - materialCost - craftCost. sell to buy orders immediately */
+  profitBuyOrder: number | null
+  /** outputVendorPrice - materialCost - craftCost. vendor instant sell */
+  profitVendor: number | null
 }
 
 export async function getCraftingData(): Promise<CraftingRecipeRow[]> {
@@ -900,17 +909,29 @@ export async function getCraftingData(): Promise<CraftingRecipeRow[]> {
     .toISOString()
     .slice(0, 10)
 
-  const [recipes, dailyRows] = await Promise.all([
+  const [recipes, dailyRows, catalogRows] = await Promise.all([
     db.select().from(craftingRecipes).all(),
     db.select().from(marketDaily).where(gte(marketDaily.date, cutoff)).orderBy(desc(marketDaily.date)).all(),
+    db.select({ hashedId: itemsCatalog.hashedId, vendorPrice: itemsCatalog.vendorPrice }).from(itemsCatalog).all(),
   ])
 
-  // Latest price per item from market_daily
+  // Latest sell price per item from market_daily
   const priceMap = new Map<string, number>()
+  // Latest buy order price per item from market_daily
+  const buyMap = new Map<string, number>()
   for (const row of dailyRows) {
     if (!priceMap.has(row.itemHashedId) && row.avgPrice != null) {
       priceMap.set(row.itemHashedId, row.avgPrice)
     }
+    if (!buyMap.has(row.itemHashedId) && row.buyAvgPrice != null) {
+      buyMap.set(row.itemHashedId, row.buyAvgPrice)
+    }
+  }
+
+  // Vendor price from items_catalog (covers gear; potions/essences not in catalog)
+  const vendorMap = new Map<string, number>()
+  for (const row of catalogRows) {
+    if (row.vendorPrice != null) vendorMap.set(row.hashedId, row.vendorPrice)
   }
 
   return recipes.map((r) => {
@@ -934,6 +955,8 @@ export async function getCraftingData(): Promise<CraftingRecipeRow[]> {
     })
 
     const outputPrice = priceMap.get(r.outputItemId) ?? null
+    const outputBuyPrice = buyMap.get(r.outputItemId) ?? null
+    const outputVendorPrice = vendorMap.get(r.outputItemId) ?? null
 
     const allMatsHavePrice = materials.every((m) => m.totalCost != null)
     const materialCost = allMatsHavePrice
@@ -943,6 +966,16 @@ export async function getCraftingData(): Promise<CraftingRecipeRow[]> {
     const profitPerCraft =
       outputPrice != null && materialCost != null
         ? outputPrice - materialCost - craftCost
+        : null
+
+    const profitBuyOrder =
+      outputBuyPrice != null && materialCost != null
+        ? outputBuyPrice - materialCost - craftCost
+        : null
+
+    const profitVendor =
+      outputVendorPrice != null && materialCost != null
+        ? outputVendorPrice - materialCost - craftCost
         : null
 
     return {
@@ -958,9 +991,13 @@ export async function getCraftingData(): Promise<CraftingRecipeRow[]> {
       recipeVendorPrice: r.recipeVendorPrice,
       materials,
       outputPrice,
+      outputBuyPrice,
+      outputVendorPrice,
       materialCost,
       craftCost,
       profitPerCraft,
+      profitBuyOrder,
+      profitVendor,
     }
   }).sort((a, b) => (b.profitPerCraft ?? -Infinity) - (a.profitPerCraft ?? -Infinity))
 }
