@@ -176,12 +176,22 @@ export default async function DashboardPage({
     ?? stats.find((s) => s.statName?.toLowerCase() === "combat")?.level
     ?? null
 
+  // Patch DB skill/stat snapshots with live API values (live API always wins — DB may lag by hours)
+  const mergedSkills = skills.map((s) => {
+    const live = liveInfo?.skills[s.skillName?.toLowerCase() ?? ""]
+    return live ? { ...s, level: live.level, experience: live.experience } : s
+  })
+  const mergedStats = stats.map((s) => {
+    const live = liveInfo?.stats[s.statName?.toLowerCase() ?? ""]
+    return live ? { ...s, level: live.level, experience: live.experience } : s
+  })
+
   // BIS gear, daily delta, efficiency, goals — parallel
   const [bisSlots, dailyDelta, activityEfficiency, goalProgress] = await Promise.all([
-    getBISEquipment(skills, stats, activeCharacter.class),
+    getBISEquipment(mergedSkills, mergedStats, activeCharacter.class),
     getDailyDelta(hashedId),
     getActivityEfficiency(hashedId),
-    getGoalsWithProgress(hashedId, skills, stats, snapshot, skillRates),
+    getGoalsWithProgress(hashedId, mergedSkills, mergedStats, snapshot, skillRates),
   ])
 
   // Next Move ranking — pure computation, no extra DB calls
@@ -223,7 +233,7 @@ export default async function DashboardPage({
   }
 
   // Sort skills: level > 1 first (desc), then level-1 skills (by name)
-  const sortedSkills = [...skills]
+  const sortedSkills = [...mergedSkills]
     .filter((s) => s.level != null && s.level > 0)
     .sort((a, b) => {
       const aLvl = a.level ?? 0
@@ -416,14 +426,13 @@ export default async function DashboardPage({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                     {sortedSkills.map((skill) => {
                       const key = skill.skillName?.toLowerCase() ?? ""
-                      const live = liveInfo?.skills[key] ?? null
                       const isActive = key === actionSkillKey
                       return (
                         <SkillBar
                           key={skill.skillName}
                           name={skill.skillName ?? ""}
-                          level={live?.level ?? skill.level ?? 0}
-                          experience={live?.experience ?? skill.experience ?? 0}
+                          level={skill.level ?? 0}
+                          experience={skill.experience ?? 0}
                           delta={isActive ? (skillRates.get(skill.skillName ?? "") ?? undefined) : undefined}
                         />
                       )
@@ -480,14 +489,14 @@ export default async function DashboardPage({
                   goals={goalProgress}
                   hashedId={hashedId}
                   availableSkills={skills.map((s) => s.skillName ?? "").filter(Boolean).sort()}
-                  availableStats={stats.map((s) => s.statName ?? "").filter(Boolean).sort()}
+                  availableStats={mergedStats.map((s) => s.statName ?? "").filter(Boolean).sort()}
                 />
               ),
             },
             ...(activePet
               ? [{ id: "pet", title: "Pet", icon: "🐾", content: <PetPanel pet={activePet} /> } satisfies PanelDef]
               : []),
-            ...(stats.length > 0
+            ...(mergedStats.length > 0
               ? [
                   {
                     id: "stats",
@@ -497,7 +506,7 @@ export default async function DashboardPage({
                     badgeColor: "text-[var(--color-gold)]",
                     content: (
                       <div className="flex flex-col gap-3">
-                        {stats
+                        {mergedStats
                           .filter((s) => s.level != null && s.level > 0)
                           .sort((a, b) => (b.level ?? 0) - (a.level ?? 0))
                           .map((stat) => (
