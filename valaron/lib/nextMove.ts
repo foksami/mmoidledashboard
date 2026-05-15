@@ -1,9 +1,10 @@
-import type { BISSlot, BISItem } from "./queries"
-import type { ActivityEfficiency } from "./queries"
+import { classScore } from "./queries"
+import type { BISSlot, BISItem, ActivityEfficiency } from "./queries"
 
 /**
  * Cumulative XP required to reach each level (OSRS formula approximation).
  * Index 0 → level 1 (0 XP), index 1 → level 2 (83 XP), etc.
+ * Cumulative XP to reach levels 1–100. Extend if IdleMMO raises the cap.
  */
 const XP_TABLE: number[] = [
   0, 83, 174, 276, 388, 512, 650, 801, 969, 1154,
@@ -29,11 +30,6 @@ export function xpToGrind(currentLevel: number, targetLevel: number): number {
   return Math.max(0, xpForLevel(targetLevel) - xpForLevel(currentLevel))
 }
 
-/** Weighted stat score — higher-priority stats count more. */
-export function classScore(stats: Record<string, number>, priority: string[]): number {
-  return priority.reduce((sum, stat, i) => sum + (stats[stat] ?? 0) * (priority.length - i), 0)
-}
-
 /** Format hours into a human-readable string. */
 export function formatHours(h: number): string {
   if (h < 1 / 60) return "<1m"
@@ -48,7 +44,7 @@ export interface UpgradeRequirement {
   current: number
   required: number
   levelsNeeded: number
-  xpToGrind: number
+  xpNeeded: number
   bestActivityType: string | null  // activity with highest XP/h for this skill
   xpPerHour: number | null         // null = no grind history
   hours: number | null             // null = no grind history
@@ -103,7 +99,7 @@ export function rankUpgrades(
           current,
           required,
           levelsNeeded,
-          xpToGrind: xpNeeded,
+          xpNeeded,
           bestActivityType: rate?.activityType ?? null,
           xpPerHour: rate?.xpPerHour ?? null,
           hours,
@@ -120,9 +116,11 @@ export function rankUpgrades(
 
     const score = alreadyUnlockable
       ? Infinity
-      : totalHours != null && totalHours > 0
-      ? statBoost / totalHours
-      : -1
+      : totalHours === null
+      ? -1
+      : totalHours === 0
+      ? Infinity
+      : statBoost / totalHours
 
     candidates.push({
       slotType: slot.slotType,

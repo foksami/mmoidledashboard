@@ -236,7 +236,7 @@ export interface BISSlot {
   totalGap: number
 }
 
-function classScore(stats: Record<string, number>, priority: string[]): number {
+export function classScore(stats: Record<string, number>, priority: string[]): number {
   return priority.reduce((sum, stat, i) => sum + (stats[stat] ?? 0) * (priority.length - i), 0)
 }
 
