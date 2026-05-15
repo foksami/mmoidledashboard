@@ -18,7 +18,7 @@ const QUALITY_COLOR: Record<string, string> = {
 }
 
 function ScoreBadge({ score, unlockable }: { score: number; unlockable: boolean }) {
-  if (unlockable) {
+  if (unlockable || !isFinite(score)) {
     return (
       <span className="text-[10px] font-semibold text-[var(--color-green)] bg-[var(--color-green)]/10 px-1.5 py-0.5 rounded border border-[var(--color-green)]/30 flex-shrink-0">
         ✓ ready
