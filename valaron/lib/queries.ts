@@ -20,6 +20,26 @@ export async function getAllCharacters(): Promise<Character[]> {
   return db.select().from(characters).all();
 }
 
+export async function upsertCharacters(
+  alts: Array<{ hashedId: string; numericId: number; name: string; cls: string; isPrimary: boolean }>
+): Promise<void> {
+  for (const c of alts) {
+    await db
+      .insert(characters)
+      .values({
+        hashedId: c.hashedId,
+        numericId: c.numericId,
+        name: c.name,
+        class: c.cls,
+        isPrimary: c.isPrimary,
+      })
+      .onConflictDoUpdate({
+        target: characters.hashedId,
+        set: { name: c.name, class: c.cls },
+      })
+  }
+}
+
 export async function getPrimaryCharacter(): Promise<Character | null> {
   const rows = await db
     .select()

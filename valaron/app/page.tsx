@@ -4,6 +4,7 @@ import {
   getPrimaryCharacter,
   getCharacterByHashedId,
   getCharacterByName,
+  upsertCharacters,
   getLatestSnapshot,
   getLatestSkills,
   getLatestStats,
@@ -28,6 +29,7 @@ import {
   getWorldBosses,
   getShrineProgress,
   getWorldLocations,
+  getCharacterAlts,
 } from "@/lib/idlemmo"
 import { SkillBar } from "@/components/ui/SkillBar"
 import { MiniSparkline } from "@/components/ui/MiniSparkline"
@@ -85,6 +87,17 @@ export default async function DashboardPage({
 }) {
   const params = await searchParams
   const charParam = typeof params.char === "string" ? params.char : undefined
+
+  // Discover & register new alts live, then load all from DB
+  const primaryChar = await getPrimaryCharacter()
+  if (primaryChar) {
+    const liveAlts = await getCharacterAlts(primaryChar.hashedId).catch(() => [])
+    if (liveAlts.length > 0) {
+      await upsertCharacters(
+        liveAlts.map((a) => ({ hashedId: a.hashed_id, numericId: a.id, name: a.name, cls: a.class, isPrimary: false }))
+      )
+    }
+  }
 
   // Resolve the active character — look up by name first (safe), fall back to hashedId for backward compat
   const allCharacters = await getAllCharacters()
