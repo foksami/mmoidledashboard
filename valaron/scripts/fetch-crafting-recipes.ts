@@ -52,13 +52,13 @@ async function apiFetch<T>(path: string): Promise<T> {
 }
 
 interface ItemsPage {
-  data: Array<{
+  items: Array<{
     hashed_id: string
     name: string
     vendor_price: number
     is_tradeable: boolean
   }>
-  meta: { current_page: number; last_page: number; total: number }
+  pagination: { current_page: number; last_page: number; total: number }
 }
 
 interface RecipeDetail {
@@ -83,11 +83,11 @@ async function fetchAllRecipeItems(): Promise<Array<{ hashedId: string; name: st
 
   do {
     console.log(`  Fetching items page ${page}/${lastPage}…`)
-    const res = await apiFetch<ItemsPage>(`/items?type=recipe&page=${page}`)
-    for (const item of res.data) {
+    const res = await apiFetch<ItemsPage>(`/item/search?type=recipe&page=${page}`)
+    for (const item of res.items ?? []) {
       items.push({ hashedId: item.hashed_id, name: item.name, vendorPrice: item.vendor_price ?? 0 })
     }
-    lastPage = res.meta.last_page
+    lastPage = res.pagination?.last_page ?? 1
     page++
     if (page <= lastPage) await sleep(DELAY_MS)
   } while (page <= lastPage)
