@@ -14,6 +14,10 @@ import { itemsCatalog } from "../lib/schema"
 const dbPath = process.env.DB_PATH ?? "./valaron.db"
 const sqlite = new Database(dbPath)
 sqlite.pragma("journal_mode = WAL")
+
+// Add columns missing from older migrations (safe no-op if already present)
+try { sqlite.exec("ALTER TABLE items_catalog ADD COLUMN image_url TEXT") } catch {}
+
 const db = drizzle(sqlite)
 
 const BASE = "https://api.idle-mmo.com/v1"

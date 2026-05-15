@@ -65,6 +65,7 @@ CREATE TABLE `items_catalog` (
 	`quality` text,
 	`vendor_price` integer,
 	`is_tradeable` integer,
+	`image_url` text,
 	`stats` text,
 	`requirements` text,
 	`upgrade_requirements` text,
@@ -77,7 +78,9 @@ CREATE TABLE `market_snapshots` (
 	`taken_at` text NOT NULL,
 	`average_price` integer,
 	`total_sold` integer,
-	`tier` integer DEFAULT 1
+	`tier` integer DEFAULT 1,
+	`latest_price` integer,
+	`latest_sold_at` text
 );
 --> statement-breakpoint
 CREATE INDEX `market_snap_idx` ON `market_snapshots` (`item_hashed_id`,`taken_at`);--> statement-breakpoint
