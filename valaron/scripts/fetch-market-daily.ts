@@ -7,6 +7,7 @@
  *   npx tsx scripts/fetch-market-daily.ts --gathering  # gathering only (~70s)
  *   npx tsx scripts/fetch-market-daily.ts --smelting   # gathering + bars (~140s)
  *   npx tsx scripts/fetch-market-daily.ts --gear       # gear catalog only
+ *   npx tsx scripts/fetch-market-daily.ts --crafting   # crafting recipe inputs + outputs only
  *
  * Rate limit: 18 req/min → 3.5s delay between requests.
  * Typical run time: ~70s (19 gathering) or ~16min (272 gear).
@@ -20,7 +21,7 @@ config({ path: ".env.local" })
 import Database from "better-sqlite3"
 import { drizzle } from "drizzle-orm/better-sqlite3"
 import { sql } from "drizzle-orm"
-import { marketDaily, itemsCatalog } from "../lib/schema"
+import { marketDaily, itemsCatalog, craftingRecipes } from "../lib/schema"
 import { GATHERING_ITEMS } from "../lib/gathering"
 import { SMELTING_RECIPES, COAL_ORE_ID } from "../lib/smelting"
 
@@ -106,38 +107,52 @@ async function main() {
   const onlyGathering = args.includes("--gathering")
   const onlySmelting  = args.includes("--smelting")
   const onlyGear      = args.includes("--gear")
+  const onlyCrafting  = args.includes("--crafting")
 
   const items: Array<{ hashedId: string; name: string }> = []
 
-  if (!onlyGear) {
-    for (const g of GATHERING_ITEMS) {
-      items.push({ hashedId: g.hashedId, name: g.name })
-    }
+  function push(id: string, name: string) {
+    if (!items.find((i) => i.hashedId === id)) items.push({ hashedId: id, name })
   }
 
-  // Add metal bars + coal for smelting profitability (--smelting or --all)
-  if (!onlyGathering && !onlyGear) {
-    for (const r of SMELTING_RECIPES) {
-      if (!items.find((i) => i.hashedId === r.barHashedId)) {
-        items.push({ hashedId: r.barHashedId, name: r.barName })
-      }
-    }
-    // coal is already in GATHERING_ITEMS, no duplicate needed
+  if (!onlyGear && !onlyCrafting) {
+    for (const g of GATHERING_ITEMS) push(g.hashedId, g.name)
   }
 
-  if (!onlyGathering) {
+  // Add metal bars for smelting profitability (--smelting or all)
+  if (!onlyGathering && !onlyGear && !onlyCrafting) {
+    for (const r of SMELTING_RECIPES) push(r.barHashedId, r.barName)
+  }
+
+  if (!onlyGathering && !onlySmelting && !onlyCrafting) {
     const gear = await db
       .select({ hashedId: itemsCatalog.hashedId, name: itemsCatalog.name })
       .from(itemsCatalog)
       .all()
-    for (const g of gear) {
-      if (!items.find((i) => i.hashedId === g.hashedId)) {
-        items.push({ hashedId: g.hashedId, name: g.name ?? g.hashedId })
-      }
+    for (const g of gear) push(g.hashedId, g.name ?? g.hashedId)
+  }
+
+  // Crafting: all unique material + output item IDs from crafting_recipes
+  if (!onlyGathering && !onlySmelting && !onlyGear) {
+    const recipes = await db
+      .select({ outputItemId: craftingRecipes.outputItemId, outputItemName: craftingRecipes.outputItemName, materials: craftingRecipes.materials })
+      .from(craftingRecipes)
+      .all()
+
+    for (const r of recipes) {
+      push(r.outputItemId, r.outputItemName ?? r.outputItemId)
+
+      let mats: Array<{ hashedItemId: string; itemName: string; quantity: number }> = []
+      try { mats = r.materials ? JSON.parse(r.materials) : [] } catch {}
+      for (const m of mats) push(m.hashedItemId, m.itemName)
     }
   }
 
-  const label = onlyGathering ? "gathering items" : onlyGear ? "gear items" : "all items"
+  const label = onlyGathering ? "gathering items"
+    : onlySmelting ? "smelting items"
+    : onlyGear ? "gear items"
+    : onlyCrafting ? "crafting items"
+    : "all items"
   console.log(`\nFetching 30-day market history for ${items.length} ${label}…\n`)
 
   let ok = 0

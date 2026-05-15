@@ -14,6 +14,7 @@
     "market:smelting": "tsx scripts/fetch-market-daily.ts --smelting",
     "market:gear": "tsx scripts/fetch-market-daily.ts --gear",
     "market:all": "tsx scripts/fetch-market-daily.ts",
+    "market:crafting": "tsx scripts/fetch-market-daily.ts --crafting",
     "recipes:fetch": "tsx scripts/fetch-crafting-recipes.ts"
   },
   "dependencies": {

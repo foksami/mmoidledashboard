@@ -1,16 +1,23 @@
 "use client"
 // components/market/CraftingPanel.tsx
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import type { CraftingRecipeRow } from "@/lib/queries"
 import { fmtNum } from "@/lib/fmt"
 
-type SortKey = "profit" | "level" | "skill"
+type SortKey = "profit" | "level"
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: "profit", label: "Profit"  },
-  { key: "level",  label: "Level"   },
-  { key: "skill",  label: "Skill"   },
+  { key: "profit", label: "Profit" },
+  { key: "level",  label: "Level"  },
 ]
+
+const SKILL_LABEL: Record<string, string> = {
+  forging:  "Forging",
+  alchemy:  "Alchemy",
+  cooking:  "Cooking",
+  weaving:  "Weaving",
+  crafting: "Crafting",
+}
 
 function ProfitBadge({ value }: { value: number | null }) {
   if (value == null)
@@ -52,6 +59,7 @@ export function CraftingPanel({ rows, skillLevels = new Map() }: Props) {
   const [sort, setSort] = useState<SortKey>("profit")
   const [expanded, setExpanded] = useState<string | null>(null)
   const [showLocked, setShowLocked] = useState(false)
+  const [activeSkill, setActiveSkill] = useState<string>("all")
 
   if (rows.length === 0) {
     return (
@@ -67,11 +75,28 @@ export function CraftingPanel({ rows, skillLevels = new Map() }: Props) {
     return (skillLevels.get(skillKey) ?? 0) >= r.levelRequired
   }
 
-  const visible = showLocked ? rows : rows.filter((r) => r.profitPerCraft != null || canCraft(r))
+  // Build skill tab list from available recipes
+  const skillTabs = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const r of rows) {
+      const k = (r.skill ?? "crafting").toLowerCase()
+      counts.set(k, (counts.get(k) ?? 0) + 1)
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([skill, count]) => ({ skill, label: SKILL_LABEL[skill] ?? skill, count }))
+  }, [rows])
+
+  const skillFiltered = activeSkill === "all"
+    ? rows
+    : rows.filter((r) => (r.skill ?? "crafting").toLowerCase() === activeSkill)
+
+  const visible = showLocked
+    ? skillFiltered
+    : skillFiltered.filter((r) => r.profitPerCraft != null || canCraft(r))
 
   const sorted = [...visible].sort((a, b) => {
     if (sort === "level") return (a.levelRequired ?? 0) - (b.levelRequired ?? 0)
-    if (sort === "skill") return (a.skill ?? "").localeCompare(b.skill ?? "")
     // profit: accessible first, then by profit desc
     const aA = canCraft(a) ? 0 : 1
     const bA = canCraft(b) ? 0 : 1
@@ -79,11 +104,40 @@ export function CraftingPanel({ rows, skillLevels = new Map() }: Props) {
     return (b.profitPerCraft ?? -Infinity) - (a.profitPerCraft ?? -Infinity)
   })
 
-  const lockedCount = rows.filter((r) => !canCraft(r)).length
+  const lockedCount = skillFiltered.filter((r) => !canCraft(r)).length
 
   return (
     <div className="flex flex-col gap-0">
-      {/* Controls */}
+      {/* Skill tabs */}
+      {skillTabs.length > 1 && (
+        <div className="flex items-center gap-0.5 mb-2 flex-wrap">
+          <button
+            onClick={() => setActiveSkill("all")}
+            className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded transition-colors ${
+              activeSkill === "all"
+                ? "bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]"
+                : "text-[var(--color-text-dim)] hover:text-[var(--color-text-secondary)]"
+            }`}
+          >
+            All ({rows.length})
+          </button>
+          {skillTabs.map(({ skill, label, count }) => (
+            <button
+              key={skill}
+              onClick={() => setActiveSkill(skill)}
+              className={`text-[9px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded transition-colors ${
+                activeSkill === skill
+                  ? "bg-[var(--color-surface-hover)] text-[var(--color-text-primary)]"
+                  : "text-[var(--color-text-dim)] hover:text-[var(--color-text-secondary)]"
+              }`}
+            >
+              {label} ({count})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Sort + locked toggle */}
       <div className="flex items-center gap-2 mb-2 flex-wrap">
         <div className="flex items-center gap-1">
           <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)] mr-1">Sort</span>
