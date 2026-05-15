@@ -121,8 +121,22 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Quick start (copy-paste)
 
+### With seed data (fastest — recommended for teammates)
+
 ```bash
-git clone https://github.com/foksami/mmoidledashboard.git && cd mmoidledashboard
+git clone https://github.com/foksami/mmoidledashboard.git && cd mmoidledashboard/valaron
+npm install
+cp .env.example .env.local   # add your API key
+npm run migrate
+npm run seed:import           # loads gear catalog + market history (instant)
+npm run poll &                # background poller
+npm run dev
+```
+
+### Full fresh fetch (if seed is outdated)
+
+```bash
+git clone https://github.com/foksami/mmoidledashboard.git && cd mmoidledashboard/valaron
 npm install
 cp .env.example .env.local        # edit: add your API key
 npm run migrate
@@ -226,6 +240,8 @@ For the market refresh, add a systemd timer or use a crontab entry alongside sys
 | `npm run market:gear` | Refresh market prices for all gear (~16 min) | Weekly |
 | `npm run market:all` | All items — gathering + bars + gear | — |
 | `npm run recipes:fetch` | Seed crafting recipes from API (~25 min) | Once |
+| `npm run seed:export` | Export catalog + market data to `data/seed.json` | After big fetch |
+| `npm run seed:import` | Import seed.json into local DB (instant) | Fresh install |
 | `npm run db:generate` | Generate Drizzle migration after schema changes | Dev only |
 | `npm run db:studio` | Open Drizzle Studio (visual DB browser) | Dev only |
 | `npx tsx scripts/fetch-catalog.ts` | Seed gear catalog from API | Once |

@@ -49,17 +49,24 @@ function GearRow({ item }: { item: GearMarketItem }) {
   return (
     <div className="flex flex-col gap-0.5 py-1.5 border-b border-[var(--color-border-subtle)] last:border-b-0 last:pb-0 first:pt-0">
       <button className="w-full text-left" onClick={() => setOpen(!open)}>
-        <div className="grid gap-2 items-center" style={{ gridTemplateColumns: "1fr 4.5rem 4.5rem" }}>
+        <div className="grid gap-1 items-center" style={{ gridTemplateColumns: "1fr 3.5rem 3.5rem 3.5rem" }}>
           {/* Name + quality */}
           <div className="flex items-center gap-1.5 min-w-0">
             <span className={`text-xs font-medium truncate ${qColor}`}>{item.name}</span>
           </div>
-          {/* Market price */}
+          {/* Sell price */}
           <span
             className="text-[10px] text-right font-semibold text-[var(--color-gold)]"
             style={{ fontFamily: "var(--font-mono)" }}
           >
             {item.marketPrice != null ? fmtNum(item.marketPrice) + "g" : "—"}
+          </span>
+          {/* Buy order price */}
+          <span
+            className="text-[10px] text-right text-[var(--color-blue)]"
+            style={{ fontFamily: "var(--font-mono)" }}
+          >
+            {item.buyPrice != null ? fmtNum(item.buyPrice) + "g" : "—"}
           </span>
           {/* Volume */}
           <span
@@ -87,14 +94,22 @@ function GearRow({ item }: { item: GearMarketItem }) {
               ))}
             </div>
           )}
-          {item.vendorPrice != null && (
-            <span className="text-[9px] text-[var(--color-text-dim)]">
-              Vendor: {fmtNum(item.vendorPrice)}g
-              {item.marketDate && (
-                <> · Data: {item.marketDate}</>
-              )}
-            </span>
-          )}
+          <div className="flex gap-3 text-[9px] flex-wrap">
+            {item.vendorPrice != null && (
+              <span className="text-[var(--color-text-dim)]">Vendor: {fmtNum(item.vendorPrice)}g</span>
+            )}
+            {item.spread != null && (
+              <span className={item.spread >= 0 ? "text-[var(--color-green)]" : "text-red-400"}>
+                Spread: {item.spread >= 0 ? "+" : ""}{fmtNum(item.spread)}g
+              </span>
+            )}
+            {item.lastBuySold != null && (
+              <span className="text-[var(--color-text-dim)]">Buy orders/d: {fmtNum(item.lastBuySold)}</span>
+            )}
+            {item.marketDate && (
+              <span className="text-[var(--color-text-dim)]">{item.marketDate.slice(0, 10)}</span>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -146,10 +161,11 @@ export function GearPricesPanel({ groups }: Props) {
             {/* Column headers + rows */}
             {expandedSlot === group.slot && (
               <div className="pb-2">
-                <div className="grid gap-2 pb-1 border-b border-[var(--color-border-subtle)] mb-1"
-                     style={{ gridTemplateColumns: "1fr 4.5rem 4.5rem" }}>
+                <div className="grid gap-1 pb-1 border-b border-[var(--color-border-subtle)] mb-1"
+                     style={{ gridTemplateColumns: "1fr 3.5rem 3.5rem 3.5rem" }}>
                   <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)]">Item</span>
-                  <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)] text-right">Price</span>
+                  <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)] text-right">Sell</span>
+                  <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)] text-right">Buy</span>
                   <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)] text-right">Sold/d</span>
                 </div>
                 {group.items.map((item) => (

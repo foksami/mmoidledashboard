@@ -571,11 +571,19 @@ export interface MarketTrend {
   volumeDelta7d: number | null
   /** last 14 days of daily rows, oldest first — for sparkline rendering */
   history14d: Array<{ date: string; avgPrice: number | null; totalSold: number | null }>
+  /** latest sell avg price */
+  latestSellPrice: number | null
+  /** latest buy order avg price */
+  latestBuyPrice: number | null
+  /** latestSellPrice - latestBuyPrice (positive = sell premium over buy orders) */
+  spread: number | null
 }
 
 export type GatheringMarketRow = GatheringItem & {
   avgPrice: number | null
   totalSold: number | null
+  buyAvgPrice: number | null
+  buyTotalSold: number | null
   marketValue: number | null
   takenAt: string | null
   trend: MarketTrend | null
@@ -645,7 +653,16 @@ export async function getGatheringMarketData(): Promise<GatheringMarketRow[]> {
         ? Math.round(((recentVol - priorVol) / priorVol) * 100)
         : null
 
-    return { priceDelta7d, volumeDelta7d, history14d }
+    // Latest day's sell vs buy prices
+    const newest = sorted[0]
+    const latestSellPrice = newest?.avgPrice ?? null
+    const latestBuyPrice  = newest?.buyAvgPrice ?? null
+    const spread =
+      latestSellPrice != null && latestBuyPrice != null
+        ? latestSellPrice - latestBuyPrice
+        : null
+
+    return { priceDelta7d, volumeDelta7d, history14d, latestSellPrice, latestBuyPrice, spread }
   }
 
   return GATHERING_ITEMS.map((item) => {
@@ -656,10 +673,12 @@ export async function getGatheringMarketData(): Promise<GatheringMarketRow[]> {
     const latest = [...rows].sort((a, b) => b.date.localeCompare(a.date))[0]
     const avgPrice    = latest?.avgPrice ?? null
     const totalSold   = latest?.totalSold ?? null
+    const buyAvgPrice = latest?.buyAvgPrice ?? null
+    const buyTotalSold = latest?.buyTotalSold ?? null
     const marketValue = avgPrice != null && totalSold != null ? avgPrice * totalSold : null
     const takenAt     = latest?.date ?? null
 
-    return { ...item, avgPrice, totalSold, marketValue, takenAt, trend }
+    return { ...item, avgPrice, totalSold, buyAvgPrice, buyTotalSold, marketValue, takenAt, trend }
   }).sort((a, b) => (b.marketValue ?? 0) - (a.marketValue ?? 0))
 }
 
@@ -742,9 +761,11 @@ export interface GearMarketItem {
   requirements: Record<string, number>
   vendorPrice: number | null
   marketPrice: number | null
+  buyPrice: number | null
+  spread: number | null
   marketDate: string | null
-  /** how many sold on last market_daily row for this item */
   lastSold: number | null
+  lastBuySold: number | null
 }
 
 export interface GearMarketGroup {
@@ -765,13 +786,15 @@ export async function getGearMarketData(): Promise<GearMarketGroup[]> {
   ])
 
   // Latest price per item from market_daily
-  const priceMap = new Map<string, { price: number | null; date: string; sold: number | null }>()
+  const priceMap = new Map<string, { price: number | null; buyPrice: number | null; date: string; sold: number | null; buySold: number | null }>()
   for (const row of dailyRows) {
     if (!priceMap.has(row.itemHashedId)) {
       priceMap.set(row.itemHashedId, {
         price: row.avgPrice ?? null,
+        buyPrice: row.buyAvgPrice ?? null,
         date: row.date,
         sold: row.totalSold ?? null,
+        buySold: row.buyTotalSold ?? null,
       })
     }
   }
@@ -782,6 +805,10 @@ export async function getGearMarketData(): Promise<GearMarketGroup[]> {
   for (const item of gearItems) {
     const slot = item.type!
     const market = priceMap.get(item.hashedId)
+    const spread =
+      market?.price != null && market?.buyPrice != null
+        ? market.price - market.buyPrice
+        : null
     const entry: GearMarketItem = {
       hashedId: item.hashedId,
       name: item.name ?? item.hashedId,
@@ -792,8 +819,11 @@ export async function getGearMarketData(): Promise<GearMarketGroup[]> {
       requirements: item.requirements ? (JSON.parse(item.requirements) as Record<string, number>) : {},
       vendorPrice: item.vendorPrice ?? null,
       marketPrice: market?.price ?? null,
+      buyPrice: market?.buyPrice ?? null,
+      spread,
       marketDate: market?.date ?? null,
       lastSold: market?.sold ?? null,
+      lastBuySold: market?.buySold ?? null,
     }
     const bucket = groups.get(slot) ?? []
     bucket.push(entry)

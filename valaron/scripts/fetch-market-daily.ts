@@ -63,20 +63,32 @@ interface MarketResponse {
 }
 
 async function fetchAndStore(hashedId: string, name: string): Promise<void> {
-  const data = await apiFetch<MarketResponse>(
+  // Fetch sell listings then buy orders — two separate rate-limited calls
+  const listings = await apiFetch<MarketResponse>(
     `/item/${hashedId}/market-history?tier=1&type=listings`
   )
+  await sleep(DELAY_MS)
+  const orders = await apiFetch<MarketResponse>(
+    `/item/${hashedId}/market-history?tier=1&type=orders`
+  )
 
-  const history = data.history_data ?? []
+  const history = listings.history_data ?? []
   if (history.length === 0) {
     console.log(`  – ${name}: no history data`)
     return
   }
 
+  // Build a map of buy order data by date for fast lookup
+  const orderMap = new Map<string, { avgPrice: number; totalSold: number }>()
+  for (const r of orders.history_data ?? []) {
+    orderMap.set(r.date, { avgPrice: r.average_price, totalSold: r.total_sold })
+  }
+
   const now = new Date().toISOString()
 
-  // Upsert each daily row
+  // Upsert each daily row with both sell listings and buy order data
   for (const row of history) {
+    const ord = orderMap.get(row.date)
     await db
       .insert(marketDaily)
       .values({
@@ -84,6 +96,8 @@ async function fetchAndStore(hashedId: string, name: string): Promise<void> {
         date: row.date,
         avgPrice: row.average_price,
         totalSold: row.total_sold,
+        buyAvgPrice: ord?.avgPrice ?? null,
+        buyTotalSold: ord?.totalSold ?? null,
         fetchedAt: now,
       })
       .onConflictDoUpdate({
@@ -91,14 +105,18 @@ async function fetchAndStore(hashedId: string, name: string): Promise<void> {
         set: {
           avgPrice: row.average_price,
           totalSold: row.total_sold,
+          buyAvgPrice: ord?.avgPrice ?? null,
+          buyTotalSold: ord?.totalSold ?? null,
           fetchedAt: now,
         },
       })
   }
 
   const latest = history.at(-1)!
+  const latestOrd = orderMap.get(latest.date)
+  const spread = latestOrd ? ` | buy ${latestOrd.avgPrice}g` : ""
   console.log(
-    `  ✓ ${name}: ${history.length} days | latest ${latest.date} — ${latest.average_price}g, ${latest.total_sold.toLocaleString()} sold`
+    `  ✓ ${name}: ${history.length} days | sell ${latest.average_price}g${spread}, ${latest.total_sold.toLocaleString()} sold`
   )
 }
 

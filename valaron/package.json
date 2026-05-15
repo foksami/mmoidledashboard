@@ -15,7 +15,9 @@
     "market:gear": "tsx scripts/fetch-market-daily.ts --gear",
     "market:all": "tsx scripts/fetch-market-daily.ts",
     "market:crafting": "tsx scripts/fetch-market-daily.ts --crafting",
-    "recipes:fetch": "tsx scripts/fetch-crafting-recipes.ts"
+    "recipes:fetch": "tsx scripts/fetch-crafting-recipes.ts",
+    "seed:export": "tsx scripts/export-seed.ts",
+    "seed:import": "tsx scripts/import-seed.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -100,8 +100,10 @@ export const marketDaily = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     itemHashedId: text("item_hashed_id").notNull(),
     date: text("date").notNull(),          // YYYY-MM-DD
-    avgPrice: integer("avg_price"),        // average price that day
-    totalSold: integer("total_sold"),      // units sold that day
+    avgPrice: integer("avg_price"),        // sell listings avg price that day
+    totalSold: integer("total_sold"),      // sell listings units sold that day
+    buyAvgPrice: integer("buy_avg_price"), // buy order avg price that day
+    buyTotalSold: integer("buy_total_sold"), // buy orders filled that day
     fetchedAt: text("fetched_at").notNull(), // when we wrote this row
   },
   (t) => [

@@ -251,37 +251,64 @@ export function GatheringPanel({ items, miningLevel, woodcuttingLevel }: Props) 
               </div>
             </button>
 
-            {/* Expanded sparklines */}
-            {isOpen && t && t.history14d.length > 1 && (
+            {/* Expanded: sparklines + buy/sell info */}
+            {isOpen && (
               <div className="mt-2 pl-5 flex flex-col gap-1.5">
-                <div className="flex items-end gap-3">
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)]">
-                      Price 14d
+                {/* Buy / sell price row */}
+                <div className="flex items-center gap-3 text-[9px]">
+                  <span className="text-[var(--color-text-dim)]">
+                    Sell: <span className="text-[var(--color-gold)]" style={{ fontFamily: "var(--font-mono)" }}>
+                      {item.avgPrice != null ? item.avgPrice + "g" : "—"}
                     </span>
-                    <Sparkline data={t.history14d} field="avgPrice" />
-                  </div>
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)]">
-                      Volume 14d
+                  </span>
+                  <span className="text-[var(--color-text-dim)]">
+                    Buy order: <span className="text-[var(--color-blue)]" style={{ fontFamily: "var(--font-mono)" }}>
+                      {item.buyAvgPrice != null ? item.buyAvgPrice + "g" : "—"}
                     </span>
-                    <Sparkline data={t.history14d} field="totalSold" />
-                  </div>
-                  <div className="flex flex-col gap-1 ml-auto text-right">
-                    {t.priceDelta7d != null && (
-                      <div>
-                        <span className="text-[9px] text-[var(--color-text-dim)]">price 7d </span>
-                        <DeltaBadge delta={t.priceDelta7d} />
-                      </div>
-                    )}
-                    {t.volumeDelta7d != null && (
-                      <div>
-                        <span className="text-[9px] text-[var(--color-text-dim)]">vol 7d </span>
-                        <DeltaBadge delta={t.volumeDelta7d} />
-                      </div>
-                    )}
-                  </div>
+                  </span>
+                  {t?.spread != null && (
+                    <span className={t.spread >= 0 ? "text-[var(--color-green)]" : "text-red-400"}>
+                      spread {t.spread >= 0 ? "+" : ""}{t.spread}g
+                    </span>
+                  )}
+                  {item.buyTotalSold != null && (
+                    <span className="text-[var(--color-text-dim)]">
+                      buy orders/d: {fmtNum(item.buyTotalSold)}
+                    </span>
+                  )}
                 </div>
+
+                {/* Sparklines */}
+                {t && t.history14d.length > 1 && (
+                  <div className="flex items-end gap-3">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)]">
+                        Price 14d
+                      </span>
+                      <Sparkline data={t.history14d} field="avgPrice" />
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] uppercase tracking-widest text-[var(--color-text-dim)]">
+                        Volume 14d
+                      </span>
+                      <Sparkline data={t.history14d} field="totalSold" />
+                    </div>
+                    <div className="flex flex-col gap-1 ml-auto text-right">
+                      {t.priceDelta7d != null && (
+                        <div>
+                          <span className="text-[9px] text-[var(--color-text-dim)]">price 7d </span>
+                          <DeltaBadge delta={t.priceDelta7d} />
+                        </div>
+                      )}
+                      {t.volumeDelta7d != null && (
+                        <div>
+                          <span className="text-[9px] text-[var(--color-text-dim)]">vol 7d </span>
+                          <DeltaBadge delta={t.volumeDelta7d} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
